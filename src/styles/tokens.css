@@ -1,0 +1,272 @@
+/* quetx design tokens — subset for the Week Dashboard.
+   Values match Claude Conversations/Twitch/Brand Assets/brand/tokens.css.
+   Fonts (Rajdhani / Barlow) are bundled locally — imported in main.tsx. */
+
+:root {
+  /* Background family */
+  --bg-0: #080c18; /* deepest — full-screen */
+  --bg-1: #0e1626; /* raised panels */
+  --bg-2: #12244e; /* card fill */
+
+  /* Brand blues */
+  --navy: #0c2048;
+  --cobalt: #295e97;
+  --cobalt-bright: #3e86cc;
+
+  /* Accent — edges & glyphs only */
+  --crimson: #c7232d;
+  --crimson-bright: #ec3139;
+  /* Crimson for text over the HUD (Phase 9.5): --crimson-bright reads 3.1–3.6:1 on
+     the panel; this reaches 4.5:1 over white, black, grey and a photo. Strips,
+     glows and fills keep --crimson-bright. */
+  --crimson-text: #ff7378;
+
+  /* T3 gold — reserved for "done / streak hit" */
+  --gold: #c8a84b;
+
+  /* Neutrals */
+  --silver: #eaedf2; /* headings */
+  --steel: #c7ced8; /* body text */
+  --slate: #8a94a6; /* muted */
+  --ink: #040d1a; /* linework */
+  --keyline: #b9bcc0;
+  --line: color-mix(in srgb, var(--steel) 14%, transparent);
+
+  --glow-crimson: 0 0 24px color-mix(in srgb, var(--crimson) 45%, transparent);
+  --glow-cobalt: 0 0 24px color-mix(in srgb, var(--cobalt-bright) 40%, transparent);
+
+  --font-display: 'Rajdhani', 'Oswald', system-ui, sans-serif;
+  --font-body: 'Barlow', 'Inter', system-ui, sans-serif;
+
+  /* ---- Surfaces -----------------------------------------------------------
+     Derived from the palette above, not new colours: tonal steps between
+     bg-0 and bg-2, so panels separate by depth as well as by keyline. */
+  --surface-0: #0b1222; /* window base — a half-step above bg-0 */
+  --surface-1: #101a2d; /* plates, sidebar */
+  --surface-2: #16223a; /* fields, controls at rest */
+  --surface-3: #1c2b48; /* controls on hover */
+  --hairline: color-mix(in srgb, var(--steel) 7%, transparent);
+  --hairline-2: color-mix(in srgb, var(--steel) 13%, transparent);
+  --cobalt-soft: #7fb0e3; /* cobalt text on translucent / dark fills */
+  --accent-wash: var(--cobalt-a16); /* selected fill */
+  --accent-wash-2: color-mix(in srgb, var(--cobalt-bright) 8%, transparent); /* hover fill */
+  --muted-2: #c3cad6; /* slate, lifted — for small text over the desktop (Phase 9.5: lifted again to reach 4.5:1 over white; was #a3adbf) */
+
+  /* ---- Alpha steps --------------------------------------------------------
+     Translucent versions of the palette, named <token>-a<percent>: the
+     scale the stylesheets reach for. Anything off the scale is written in
+     place as color-mix(in srgb, var(--token) N%, transparent). No colour
+     outside the palette is ever mixed in. */
+  --steel-a06: color-mix(in srgb, var(--steel) 6%, transparent);
+  --steel-a10: color-mix(in srgb, var(--steel) 10%, transparent);
+  --steel-a16: color-mix(in srgb, var(--steel) 16%, transparent);
+  --steel-a20: color-mix(in srgb, var(--steel) 20%, transparent);
+  --steel-a22: color-mix(in srgb, var(--steel) 22%, transparent);
+  --steel-a28: color-mix(in srgb, var(--steel) 28%, transparent);
+  --steel-a40: color-mix(in srgb, var(--steel) 40%, transparent);
+  --cobalt-a16: color-mix(in srgb, var(--cobalt-bright) 16%, transparent);
+  --cobalt-a20: color-mix(in srgb, var(--cobalt-bright) 20%, transparent);
+  --cobalt-a30: color-mix(in srgb, var(--cobalt-bright) 30%, transparent);
+  --cobalt-a35: color-mix(in srgb, var(--cobalt-bright) 35%, transparent);
+  --cobalt-a40: color-mix(in srgb, var(--cobalt-bright) 40%, transparent);
+  --cobalt-a45: color-mix(in srgb, var(--cobalt-bright) 45%, transparent);
+  --cobalt-a55: color-mix(in srgb, var(--cobalt-bright) 55%, transparent);
+  --cobalt-a60: color-mix(in srgb, var(--cobalt-bright) 60%, transparent);
+  --cobalt-a80: color-mix(in srgb, var(--cobalt-bright) 80%, transparent);
+  --cobalt-soft-a35: color-mix(in srgb, var(--cobalt-soft) 35%, transparent);
+  --cobalt-soft-a50: color-mix(in srgb, var(--cobalt-soft) 50%, transparent);
+  --cobalt-soft-a55: color-mix(in srgb, var(--cobalt-soft) 55%, transparent);
+  --cobalt-soft-a60: color-mix(in srgb, var(--cobalt-soft) 60%, transparent);
+  --crimson-a14: color-mix(in srgb, var(--crimson-bright) 14%, transparent);
+  --crimson-a60: color-mix(in srgb, var(--crimson-bright) 60%, transparent);
+  --ink-a45: color-mix(in srgb, var(--ink) 45%, transparent);
+  --ink-a50: color-mix(in srgb, var(--ink) 50%, transparent);
+  --ink-a55: color-mix(in srgb, var(--ink) 55%, transparent);
+  --ink-a70: color-mix(in srgb, var(--ink) 70%, transparent);
+  --ink-a90: color-mix(in srgb, var(--ink) 90%, transparent);
+
+  /* ---- HUD geometry -------------------------------------------------------
+     Plates (bubbles, cards, panels, primary buttons) are blade-cut: --cut
+     off the top-left and bottom-right corners. Controls are near-square. */
+  --cut: 12px; /* corner-cut for blade plates */
+  --cut-sm: 7px; /* buttons, tiles */
+  --cut-xs: 4px; /* tags, the today chip */
+  --r-sm: 2px;
+  --r-md: 2px;
+  --r-lg: 3px;
+  --r-pill: 999px;
+  /* A plate's keyline: cobalt at the leading cut, a quiet steel along the
+     long edges, a little brighter again at the trailing cut. */
+  --edge: color-mix(in srgb, var(--steel) 11%, transparent);
+  --edge-lead: var(--cobalt-soft-a60);
+  --edge-trail: color-mix(in srgb, var(--steel) 26%, transparent);
+  /* The plate's outer keyline, in --ink: the dark half of a double edge, so
+     a plate still reads over a white window at any Background setting. */
+  --edge-outer: var(--ink-a70);
+
+  /* A crisp dark halo for text that sits over the desktop: a near-opaque
+     --ink outline hugging each glyph, then a soft falloff. Whatever window
+     is behind a bubble, every stroke of small text is edged in ink. */
+  --halo: 0 0 1px var(--ink), 0 0 1px var(--ink), 0 0 2px var(--ink), 0 1px 2px var(--ink-a90), 0 0 8px var(--ink-a45);
+
+  /* 4px rhythm. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --control-h: 36px; /* editor hit targets stay >= 32px */
+  --ease-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* ---- Motion (brand) ---- */
+  --ease-blade: cubic-bezier(0.2, 0.9, 0.1, 1);
+  --dur-fast: 180ms;
+  --dur-med: 420ms;
+}
+
+/* ---- Blade plates -----------------------------------------------------------
+   --plate clips the host to the brand corner cut. It is declared per host,
+   not on :root, so each host's own --cut applies (a custom property that uses
+   var() resolves where it is declared).
+
+   clip-path clips borders and outer shadows, so a plate draws its edge as two
+   1px rings: ::before is the outer one in --edge-outer (ink), ::after the
+   inner one in --plate-edge (cobalt at the leading cut, steel along the
+   sides). Each ring is one polygon — the outer path clockwise, the inner one
+   back the other way, so the nonzero fill rule leaves the middle open —
+   between offsets --o and --i from the edge (a 45° cut moves 0.414× the
+   offset along each side). Hosts with a top-edge tick set --tick-c; the tick
+   is painted into both rings, so it spans the full 2px edge. */
+:where(.q-plate, .hud, .card, .tpl__card, .capture, .arr__add, .btn--primary, .tpl__icon, .np__art) {
+  --plate: polygon(
+    var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)
+  );
+  --plate-edge: linear-gradient(135deg, var(--edge-lead) 0, var(--edge) 24%, var(--edge) 80%, var(--edge-trail) 100%);
+  --plate-tick: linear-gradient(var(--tick-c, transparent), var(--tick-c, transparent)) calc(var(--cut) + 6px) 0 / 18px 2px no-repeat;
+}
+:where(.q-plate, .hud, .card, .tpl__card, .capture, .arr__add) {
+  position: relative;
+  clip-path: var(--plate);
+}
+:where(.q-plate, .hud, .card, .tpl__card, .capture, .arr__add)::before,
+:where(.q-plate, .hud, .card, .tpl__card, .capture, .arr__add)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  clip-path: polygon(
+    calc(var(--cut) + var(--o) * 0.42) var(--o), calc(100% - var(--o)) var(--o),
+    calc(100% - var(--o)) calc(100% - var(--cut) - var(--o) * 0.42),
+    calc(100% - var(--cut) - var(--o) * 0.42) calc(100% - var(--o)),
+    var(--o) calc(100% - var(--o)), var(--o) calc(var(--cut) + var(--o) * 0.42),
+    calc(var(--cut) + var(--o) * 0.42) var(--o),
+    calc(var(--cut) + var(--i) * 0.42) var(--i), var(--i) calc(var(--cut) + var(--i) * 0.42),
+    var(--i) calc(100% - var(--i)), calc(100% - var(--cut) - var(--i) * 0.42) calc(100% - var(--i)),
+    calc(100% - var(--i)) calc(100% - var(--cut) - var(--i) * 0.42), calc(100% - var(--i)) var(--i),
+    calc(var(--cut) + var(--i) * 0.42) var(--i)
+  );
+}
+:where(.q-plate, .hud, .card, .tpl__card, .capture, .arr__add)::before {
+  --o: 0px;
+  --i: 1px;
+  background: var(--plate-tick), var(--edge-outer);
+}
+:where(.q-plate, .hud, .card, .tpl__card, .capture, .arr__add)::after {
+  --o: 1px;
+  --i: 2px;
+  background: var(--plate-tick), var(--plate-edge);
+}
+
+/* ---- Type ------------------------------------------------------------------- */
+
+.q-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--silver);
+}
+
+.q-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--silver);
+}
+
+.q-num {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Corner brackets ----------------------------------------------------------- */
+
+.q-bracket {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--steel-a40);
+  pointer-events: none;
+}
+.q-bracket.tl { top: 34px; left: 34px; border-right: 0; border-bottom: 0; }
+.q-bracket.tr { top: 34px; right: 34px; border-left: 0; border-bottom: 0; }
+.q-bracket.bl { bottom: 34px; left: 34px; border-right: 0; border-top: 0; }
+.q-bracket.br { bottom: 34px; right: 34px; border-left: 0; border-top: 0; }
+
+/* Brackets on any box: the four corners drawn as backgrounds on ::after, so
+   the host keeps its own background. The host must be positioned. Tune with
+   --bk-c (colour), --bk-l (arm length), --bk-w (weight), --bk-inset. */
+.q-brackets::after {
+  content: '';
+  position: absolute;
+  inset: var(--bk-inset, 0);
+  pointer-events: none;
+  color: var(--bk-c, var(--steel-a40));
+  background:
+    linear-gradient(currentColor, currentColor) left top / var(--bk-l, 14px) var(--bk-w, 1.5px),
+    linear-gradient(currentColor, currentColor) left top / var(--bk-w, 1.5px) var(--bk-l, 14px),
+    linear-gradient(currentColor, currentColor) right top / var(--bk-l, 14px) var(--bk-w, 1.5px),
+    linear-gradient(currentColor, currentColor) right top / var(--bk-w, 1.5px) var(--bk-l, 14px),
+    linear-gradient(currentColor, currentColor) left bottom / var(--bk-l, 14px) var(--bk-w, 1.5px),
+    linear-gradient(currentColor, currentColor) left bottom / var(--bk-w, 1.5px) var(--bk-l, 14px),
+    linear-gradient(currentColor, currentColor) right bottom / var(--bk-l, 14px) var(--bk-w, 1.5px),
+    linear-gradient(currentColor, currentColor) right bottom / var(--bk-w, 1.5px) var(--bk-l, 14px);
+  background-repeat: no-repeat;
+  transition: color var(--dur-fast) var(--ease-blade);
+}
+
+/* ---- Motion ------------------------------------------------------------------ */
+
+/* The brand entrance: a wipe across on the blade ease. (A plate animates its
+   own polygon instead — see base.css — since this would replace its cut.) */
+@keyframes q-wipe-in {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+/* ---- Extras: day/night shift ---------------------------------------------------
+   Set as data-phase on the root by App.tsx, and only while the extra is on
+   (lib/extras.ts dayPhase: dusk 19–22, night 22–07). Cooler and a touch
+   dimmer: text steps a little toward --cobalt-soft (#7fb0e3) and the accent
+   toward --cobalt (#295e97) — the palette's own values, mixed; no new hue.
+   The HUD fill deepens to match (base.css), so text keeps its contrast. */
+:root[data-phase='dusk'] {
+  --silver: color-mix(in srgb, #eaedf2 92%, #7fb0e3);
+  --steel: color-mix(in srgb, #c7ced8 92%, #7fb0e3);
+  --muted-2: color-mix(in srgb, #c3cad6 90%, #7fb0e3);
+  --cobalt-bright: color-mix(in srgb, #3e86cc 90%, #295e97);
+}
+:root[data-phase='night'] {
+  --silver: color-mix(in srgb, #eaedf2 84%, #7fb0e3);
+  --steel: color-mix(in srgb, #c7ced8 84%, #7fb0e3);
+  --muted-2: color-mix(in srgb, #c3cad6 84%, #7fb0e3);
+  --slate: color-mix(in srgb, #8a94a6 88%, #7fb0e3);
+  --cobalt-bright: color-mix(in srgb, #3e86cc 78%, #295e97);
+  --gold: color-mix(in srgb, #c8a84b 90%, #8a94a6);
+}

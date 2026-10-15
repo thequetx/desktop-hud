@@ -1,0 +1,34 @@
+# Your week skeleton: the things that happen every week (work hours, the gym,
+# a class), which the HUD uses for pre-block escalation, focus mode and week
+# health. It starts empty; nothing in the HUD depends on it being filled in.
+#
+# days: mon tue wed thu fri sat sun   |   times: 24h "HH:MM" local
+#
+# Example block:
+#
+#   - name: Gym
+#     kind: gym
+#     days: [mon, wed, fri]
+#     start: "07:00"
+#     end: "08:00"
+
+blocks: []
+
+# How long a task takes when its line doesn't say (`~90m` or `[est:: 90m]` on
+# the line always wins). Keyed by the first `#tag` on the task line.
+durations:
+  default: 60m
+  content: 90m
+  admin: 30m
+  errand: 45m
+
+# When work *could* go, by day and time. Empty means no time map.
+#
+# Example window:
+#
+#   - name: deep
+#     days: [mon, tue, wed, thu, fri]
+#     start: "09:00"
+#     end: "12:00"
+#     min_block: 60
+windows: []

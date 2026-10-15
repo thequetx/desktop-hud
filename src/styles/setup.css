@@ -1,0 +1,500 @@
+/* =============================================================================
+   Phase 9.5 — the Integrations tab and the set-up wizard (Display & HUD)
+   The same plates, captions and controls as the other tabs (base.css). The
+   status lights reuse .cal-state: cobalt on, crimson needs fixing, slate off.
+   ============================================================================= */
+
+.integ {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.integ__card--notes {
+  grid-row: span 2;
+}
+.integ__head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.integ__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.integ__title .cal-state {
+  width: 10px;
+  height: 10px;
+}
+.integ__status {
+  margin-left: auto;
+  font: 600 12px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--slate);
+}
+.integ__status--ok {
+  color: var(--cobalt-soft);
+}
+.integ__status--bad {
+  color: color-mix(in srgb, var(--crimson-bright) 55%, var(--silver));
+}
+/* What it reads and writes: two short labelled lines, always in view. */
+.integ__rw {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface-0);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.integ__rw > div {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 10px;
+}
+.integ__rw dt {
+  padding-top: 1px;
+  font: 600 11.5px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted-2);
+}
+.integ__rw dd {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--steel);
+}
+.integ__lead {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--slate);
+}
+.integ .srow__control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.integ .srow__hint {
+  max-width: 52ch;
+  line-height: 1.45;
+}
+.integ .card__foot {
+  flex-wrap: wrap;
+}
+
+/* Where to find a calendar link: a disclosure under the Calendars card, and
+   open in the wizard. */
+.icshelp {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+.icshelp summary {
+  cursor: pointer;
+  font: 600 12.5px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--cobalt-soft);
+}
+.icshelp summary:hover {
+  color: var(--silver);
+}
+.icshelp dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  margin: 12px 0 0;
+}
+.icshelp dt {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--silver);
+}
+.icshelp dd {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--steel);
+}
+.icshelp dd i {
+  font-style: normal;
+  color: var(--silver);
+}
+.icshelp__note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--slate);
+}
+
+/* Notes: what is in use (or will be after a restart), and the two ways to change it. */
+.notes-src {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--hairline);
+}
+.notes-src__now {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.notes-src__label {
+  font: 600 11.5px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted-2);
+}
+.notes-src__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--silver);
+}
+.notes-src__found {
+  font-size: 12.5px;
+  color: var(--steel);
+}
+.notes-src__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.notes-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--hairline);
+}
+.notes-fields .fld--wide {
+  grid-column: 1 / -1;
+}
+.restart {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  background: var(--accent-wash);
+  box-shadow: inset 2px 0 0 var(--cobalt-bright);
+}
+.restart p {
+  flex: 1;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--silver);
+}
+
+/* ---- the wizard ---- */
+
+.onb__steps {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.onb__steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  font: 600 13.5px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--slate);
+}
+.onb__steps li.is-now {
+  color: var(--silver);
+  background: linear-gradient(0deg, var(--accent-wash), transparent);
+  box-shadow: inset 0 -2px 0 var(--cobalt-bright);
+}
+.onb__steps li.is-past {
+  color: var(--steel);
+}
+.onb__num {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 0 0 1px var(--hairline-2);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.onb__steps li.is-now .onb__num {
+  background: var(--cobalt);
+  box-shadow: none;
+}
+.onb__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 32px 40px 24px;
+}
+.onb__body--done {
+  display: grid;
+  place-items: center;
+}
+.onb__step {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 880px;
+  margin: 0 auto;
+}
+.onb__h {
+  margin: 0;
+  font: 700 26px var(--font-display);
+  letter-spacing: 0.02em;
+  color: var(--silver);
+}
+.onb__lede {
+  margin: 0 0 6px;
+  max-width: 64ch;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--steel);
+}
+.onb__fine {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--slate);
+}
+.onb__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+.pres .linkbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cobalt-soft);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.pres .linkbtn:hover {
+  color: var(--silver);
+}
+
+/* Big choices, one picked: a plate each, the chosen one lit cobalt. */
+.onb-choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.pres .onb-choice__card,
+.pres .onb-preset {
+  --cut: 12px;
+  position: relative;
+  clip-path: var(--plate);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 20px 20px;
+  border: 0;
+  background: var(--surface-1);
+  color: var(--steel);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-soft);
+}
+.pres .onb-choice__card:hover,
+.pres .onb-preset:hover {
+  background: color-mix(in srgb, var(--surface-1) 50%, var(--surface-2));
+}
+.pres .onb-choice__card.is-on,
+.pres .onb-preset.is-on {
+  background: color-mix(in srgb, var(--cobalt) 22%, var(--surface-1));
+  box-shadow: inset 0 0 0 1px var(--cobalt-a60), inset 0 -2px 0 var(--cobalt-bright);
+}
+.pres .onb-choice__card:focus-visible,
+.pres .onb-preset:focus-visible {
+  outline: 2px solid var(--silver);
+  outline-offset: -5px;
+}
+.onb-choice__tick {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 0 0 1px var(--hairline-2);
+  color: var(--silver);
+}
+.onb-choice__card.is-on .onb-choice__tick {
+  background: var(--cobalt);
+  box-shadow: none;
+}
+.onb-choice__name,
+.onb-preset__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 17px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--silver);
+}
+.onb-choice__hint,
+.onb-preset__who {
+  max-width: 44ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--steel);
+}
+
+.onb-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px;
+  background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.onb-folder__pick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.onb-folder__found {
+  font-size: 13px;
+  color: var(--steel);
+}
+.onb-folder__found b {
+  color: var(--silver);
+}
+.onb-write {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+.onb-write__hint {
+  margin: 0;
+  max-width: 90ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--slate);
+}
+
+.onb-link {
+  display: grid;
+  grid-template-columns: 3fr minmax(140px, 1fr) auto;
+  gap: 8px;
+}
+.onb-cals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.onb-cals li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface-1);
+  box-shadow: inset 2px 0 0 var(--cobalt-bright);
+}
+.onb-cals__name {
+  font-weight: 600;
+  color: var(--silver);
+}
+.onb-cals__hint {
+  font-size: 12.5px;
+  color: var(--slate);
+}
+.onb__step .icshelp {
+  margin-top: 4px;
+}
+
+/* Presets: three plates, each with a tiny screen showing where its bubbles sit. */
+.onb-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.pres .onb-preset {
+  gap: 8px;
+}
+.onb-preset__list {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--slate);
+}
+.onb-screen {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 6px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface-0));
+  box-shadow: inset 0 0 0 1px var(--hairline-2);
+}
+.onb-screen__stack {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 26%;
+}
+.onb-screen__stack--top-left { top: 7%; left: 4%; }
+.onb-screen__stack--top-right { top: 7%; right: 4%; }
+.onb-screen__stack--bottom-left { bottom: 7%; left: 4%; flex-direction: column-reverse; }
+.onb-screen__stack--bottom-right { bottom: 7%; right: 4%; flex-direction: column-reverse; }
+.onb-screen__stack i {
+  display: block;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--steel-a28);
+  box-shadow: inset 2px 0 0 var(--cobalt-soft-a60);
+}
+.onb-preset.is-on .onb-screen__stack i {
+  background: var(--cobalt-a55);
+  box-shadow: inset 2px 0 0 var(--cobalt-soft);
+}
+
+.onb-backdrop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px;
+  background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.onb-backdrop__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.onb-backdrop__label {
+  font: 600 12px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted-2);
+}
+.onb-backdrop__hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--slate);
+}

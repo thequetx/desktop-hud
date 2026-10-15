@@ -1,0 +1,2957 @@
+/* =============================================================================
+   Week Dashboard — one HUD language
+   -----------------------------------------------------------------------------
+   Every surface left in the app (the HUD corners, arrange mode, the Display &
+   HUD window, the idle screen, quick capture) speaks the quetx HUD dialect:
+
+   1. Blade plates. Bubbles, cards, panels and primary buttons are cut on the
+      top-left and bottom-right corners (tokens.css --plate). Their edge is a
+      1px keyline drawn on ::before — cobalt at the leading cut, quiet steel
+      along the sides — because clip-path would clip a border or a shadow.
+   2. Near-square controls. Fields, switches, segments, chips and tiles have
+      2px corners; selection is a cobalt bar or wash, not a rounded pill.
+   3. Type does the hierarchy. Rajdhani, uppercase and tracked, for captions,
+      labels, buttons and every number (a numeric readout); Barlow for
+      anything you read as a sentence.
+   4. Brackets and ticks. Corner brackets frame the things that are frames
+      (the idle screen, Next up there, arrange mode, the editor preview);
+      meters are segmented; a short cobalt tick marks each plate's top edge.
+   5. Colour with meaning. Cobalt is the only accent. Crimson is urgency,
+      escalation or delete; gold is done or a streak hit. Nothing else.
+   6. Calm. Motion is the brand wipe on the blade ease, once, on entry, and
+      none of it runs under prefers-reduced-motion. Generous spacing and 36px
+      hit targets stay from the soft pass.
+   ============================================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--steel);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* Inside the Electron shell the ambient window is transparent so whatever
+   desktop background the user has (a picture, a colour, a live wallpaper)
+   shows through behind the panels. */
+.is-electron body {
+  background: transparent;
+}
+
+button {
+  font: inherit;
+  color: var(--steel);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  border-color: var(--cobalt-bright);
+  color: var(--silver);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Focus, everywhere: a 2px cobalt ring off the surface. Plates and fields
+   override it below (a clipped plate can't show an outer ring; a field shows
+   focus on its own edge). */
+:focus-visible {
+  outline: 2px solid var(--cobalt-bright);
+  outline-offset: 2px;
+}
+
+/* Quiet scrollbars, everywhere they can appear: a thin steel rail that turns
+   cobalt under the pointer. The default light-grey ones were the brightest
+   thing in the window. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 1px;
+  background: var(--steel-a16) padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--cobalt-soft-a50);
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+
+.banner {
+  padding: 6px 16px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.banner--warn {
+  color: var(--crimson-bright);
+  background: color-mix(in srgb, var(--crimson) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--crimson-bright);
+}
+.muted {
+  color: var(--slate);
+}
+
+/* ---------- Streaks ---------- */
+
+.streaks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+.streak {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.streak__label {
+  min-width: 52px;
+  font-size: 10px;
+  color: var(--muted-2);
+}
+.streak__bar {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+}
+/* One segment per session in the target — a segmented meter. */
+.streak__bar i {
+  flex: 1;
+  height: 6px;
+  background: linear-gradient(var(--steel-a16), var(--steel-a16)), var(--ink-a55);
+}
+.streak__bar i.is-on {
+  background: var(--cobalt-bright);
+}
+.streak__count {
+  min-width: 26px;
+  text-align: right;
+  color: var(--steel);
+}
+/* Target met: that's a streak hit, which is what gold is for. */
+.streak.is-hit .streak__bar i {
+  background: var(--gold);
+}
+.streak.is-hit .streak__count {
+  color: var(--gold);
+}
+
+/* ---------- The Display & HUD window ----------
+   `.modal` is the window's root. It was a dialog over the planner; since the
+   planner was archived it is always its own frameless window (--window). */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ink) 62%, transparent);
+}
+.modal__panel {
+  display: flex;
+  flex-direction: column;
+  max-height: 84vh;
+  background: var(--bg-1);
+  overflow: hidden;
+}
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+.modal__head .q-title {
+  font-size: 16px;
+}
+.modal__head button {
+  border: 0;
+  background: transparent;
+  color: var(--slate);
+  font-size: 15px;
+}
+.modal__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+}
+.modal__spacer {
+  flex: 1;
+}
+
+.modal--window {
+  background: var(--surface-0);
+}
+.modal--window .modal__panel {
+  width: 100vw;
+  height: 100vh;
+  max-height: none;
+}
+.modal__head.is-drag {
+  -webkit-app-region: drag;
+}
+.modal__head.is-drag button,
+.modal__head.is-drag input {
+  -webkit-app-region: no-drag;
+}
+
+/* ---------- Ambient ----------
+   Keep the quetx-dark identity, softened so it sits calmly over any desktop
+   background. In the Electron shell the body is transparent, so this is a
+   scrim over the user's desktop; in a browser tab it sits over --bg-0. */
+
+.ambient {
+  /* Light-touch scrim — you can keep working in windows behind it.
+     Tune here: raise the alphas for more cover, lower for more see-through. */
+  --scrim-inner: color-mix(in srgb, var(--bg-1) 14%, transparent);
+  --scrim-outer: color-mix(in srgb, var(--ink) 32%, transparent);
+
+  position: relative;
+  height: 100%;
+  padding: 60px 72px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  color: var(--steel);
+  /* Per-glyph halo so text stays legible over the lighter scrim / a busy
+     wallpaper, without needing a heavy background tint. */
+  text-shadow: 0 1px 14px var(--ink-a70), 0 0 3px var(--ink-a55);
+  background: radial-gradient(130% 100% at 28% 10%, var(--scrim-inner) 0%, var(--scrim-outer) 80%);
+  box-shadow: inset 0 0 200px 64px color-mix(in srgb, var(--ink) 22%, transparent);
+  animation: ambient-in 900ms var(--ease-blade) both;
+}
+/* The four screen brackets draw in after the scrim. */
+.ambient > .q-bracket {
+  animation: q-wipe-in var(--dur-med) var(--ease-blade) 300ms both;
+}
+
+@keyframes ambient-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.ambient__clock {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+.ambient__time {
+  font-size: 64px;
+  color: var(--silver);
+  line-height: 1;
+  text-shadow: 0 0 30px var(--cobalt-a35), 0 2px 18px var(--ink-a50);
+}
+.ambient__day {
+  font-size: 15px;
+  color: var(--slate);
+  letter-spacing: 0.14em;
+}
+
+/* Section captions carry a short cobalt tick, like a plate's top edge. */
+.ambient__sec > .q-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--slate);
+}
+.ambient__sec > .q-label::before {
+  content: '';
+  width: 14px;
+  height: 2px;
+  background: var(--cobalt-bright);
+  box-shadow: 0 0 8px var(--cobalt-a60);
+}
+
+/* "This week" stays top-left under the clock. */
+.ambient__thisweek {
+  max-width: 40%;
+}
+
+/* "Next up" is pushed to the bottom and centred, clear of the upper-middle
+   of the screen, where a wallpaper's subject usually sits — and framed with
+   the same brackets as the screen's corners. */
+.ambient__nextup {
+  position: relative;
+  margin-top: auto;
+  margin-bottom: 18px;
+  align-self: center;
+  max-width: 680px;
+  padding: 20px 32px 22px;
+  text-align: center;
+  --bk-c: color-mix(in srgb, var(--steel) 34%, transparent);
+  --bk-l: 18px;
+  --bk-w: 2px;
+}
+.ambient__nextup > .q-label {
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.ambient__nextup > .q-label::after {
+  content: '';
+  width: 14px;
+  height: 2px;
+  background: var(--cobalt-bright);
+  box-shadow: 0 0 8px var(--cobalt-a60);
+}
+.ambient__nextup .ambient__list {
+  display: inline-flex;
+  text-align: left;
+}
+
+.ambient__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 17px;
+  color: var(--steel);
+}
+.ambient__list li.is-done {
+  color: var(--muted-2);
+  text-decoration: line-through;
+}
+.ambient__next .u {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+}
+.u__time {
+  color: var(--cobalt-bright);
+  font-size: 15px;
+  min-width: 92px;
+  letter-spacing: 0.02em;
+}
+/* Ambient reserves crimson for nothing. A single cool accent keeps this
+   calm; meal-prep gets a warm hint only. */
+.u--meal-prep .u__time {
+  color: var(--gold);
+}
+.u__label {
+  color: var(--silver);
+}
+.ambient__stub {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--muted-2);
+}
+
+.weekstrip {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+}
+.weekstrip__d {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted-2);
+}
+.weekstrip__d.is-today {
+  color: var(--cobalt-bright);
+  text-shadow: 0 0 16px color-mix(in srgb, var(--cobalt-bright) 50%, transparent), 0 1px 12px color-mix(in srgb, var(--ink) 75%, transparent);
+}
+.weekstrip__dow {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.weekstrip__num {
+  font-size: 16px;
+}
+
+/* Phase 6 §4 audit: this was the ambient layer's only crimson, and crimson is
+   reserved here for the now-line alone (Decisions §1). A dropped calendar is a
+   fact to note, not an emergency — gold says so without spending the one signal
+   the ambient view is allowed to raise its voice with. */
+.ambient__err {
+  position: absolute;
+  bottom: 28px;
+  right: 34px;
+  font-size: 11px;
+  color: var(--gold);
+  opacity: 0.85;
+}
+
+/* ---------- HUD bubbles ----------
+   Each corner is its own transparent, click-through window holding a stack of
+   bubbles. A bubble is a blade plate: a translucent fill at the owner's
+   Background setting (--hud-alpha, 0.65 by default, per-bubble via
+   bgOpacity), a faint scanline texture that fades with it, the plate keyline,
+   and a short cobalt tick on the top edge. No backdrop-filter — in a
+   transparent Electron window there is nothing behind the page to blur. */
+
+.hudstack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: auto;
+}
+
+.hud {
+  --cut: 10px;
+  /* The fill, kept whole so Now playing can lay its glow over it. */
+  --bub-fill: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-1) calc(min(1, var(--hud-alpha, 0.65) + 0.03) * 100%), transparent),
+    color-mix(in srgb, var(--bg-0) calc(max(0, var(--hud-alpha, 0.65) - 0.03) * 100%), transparent)
+  );
+  /* Scanlines at a whisper, scaled by the fill so "Clear" is really clear. */
+  --bub-scan: repeating-linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--steel) calc(var(--hud-alpha, 0.65) * 3.5%), transparent) 0 1px,
+    transparent 1px 3px
+  );
+
+  /* height follows content — the shell window is resized to match (resizeHud) */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 16px 13px;
+  overflow: hidden;
+  --tick-c: var(--cobalt-bright);
+  color: var(--steel);
+  /* Over a white window at a low Background setting the fill can't carry
+     small text on its own (steel sits at ~1.1:1 at 25%); the ink halo can. */
+  text-shadow: var(--halo);
+  background: var(--bub-scan), var(--bub-fill);
+  animation: plate-in 560ms var(--ease-blade) backwards;
+}
+
+/* Entrance: the plate opens across from its corner's side, on the blade
+   ease. The polygon collapses to one edge rather than using q-wipe-in's
+   inset(), which would replace the cut while it ran. */
+@keyframes plate-in {
+  from {
+    opacity: 0;
+    clip-path: polygon(0 0, 0 0, 0 calc(100% - var(--cut)), 0 100%, 0 100%, 0 var(--cut));
+  }
+}
+@keyframes plate-in-r {
+  from {
+    opacity: 0;
+    clip-path: polygon(100% 0, 100% 0, 100% calc(100% - var(--cut)), 100% 100%, 100% 100%, 100% var(--cut));
+  }
+}
+.hudstack--top-right .hud,
+.hudstack--bottom-right .hud,
+.pres__previewstack .hud {
+  animation-name: plate-in-r;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud,
+  .ambient,
+  .ambient > .q-bracket {
+    animation: none;
+  }
+}
+
+/* Hover fade: the bubble under the cursor drops to --hud-hover-opacity
+   (Display & HUD, 20% by default) so the window behind it can be read, and
+   comes back when the cursor leaves. The whole plate fades — fill, keyline and
+   type — since it's what's *behind* that matters for that moment. Never in
+   arrange mode (Hud.tsx doesn't set the class there). Short and soft rather
+   than blade-timed: it follows the cursor, so it must never feel like lag. */
+.hudstack > .hud.bub {
+  transition: opacity 150ms var(--ease-soft);
+}
+.hudstack > .hud.bub--nowplaying {
+  transition: --np-accent 900ms ease, opacity 150ms var(--ease-soft);
+}
+.hudstack > .hud.bub.is-hover-faded {
+  opacity: var(--hud-hover-opacity, 0.2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hudstack > .hud.bub,
+  .hudstack > .hud.bub--nowplaying {
+    transition: none;
+  }
+}
+
+/* Backdrop (Phase 9.5, Display & HUD → Screens → HUD): what sits behind a
+   bubble's text. `panel` is the plate above and needs nothing here. `scrim` is
+   a soft shade in --ink with feathered edges and no keyline, at the same
+   Background strength; `none` leaves only each glyph's ink halo. Arrange mode
+   always draws the panel (its handles need a plate to sit on). The plate's
+   opening wipe animates its cut, so these fade in instead. */
+.hudstack.hud--bd-scrim:not(.is-arranging) > .hud,
+.hudstack.hud--bd-none:not(.is-arranging) > .hud {
+  clip-path: none;
+  animation-name: bd-fade-in;
+}
+.hudstack.hud--bd-scrim:not(.is-arranging) > .hud::before,
+.hudstack.hud--bd-scrim:not(.is-arranging) > .hud::after,
+.hudstack.hud--bd-none:not(.is-arranging) > .hud::before,
+.hudstack.hud--bd-none:not(.is-arranging) > .hud::after {
+  display: none;
+}
+.hudstack.hud--bd-scrim:not(.is-arranging) > .hud {
+  --bub-fill: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ink) calc(min(1, var(--hud-alpha, 0.8) + 0.02) * 100%), transparent),
+    color-mix(in srgb, var(--ink) calc(var(--hud-alpha, 0.8) * 100%), transparent)
+  );
+  --bub-scan: linear-gradient(transparent, transparent);
+  --feather-x: 14px;
+  --feather-y: 9px;
+  -webkit-mask-image:
+    linear-gradient(90deg, transparent, #000 var(--feather-x), #000 calc(100% - var(--feather-x)), transparent),
+    linear-gradient(180deg, transparent, #000 var(--feather-y), #000 calc(100% - var(--feather-y)), transparent);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  border-radius: 12px;
+}
+.hudstack.hud--bd-none:not(.is-arranging) > .hud,
+.hudstack.hud--bd-none:not(.is-arranging) > .hud.bub--nowplaying {
+  background: none;
+  box-shadow: none;
+}
+@keyframes bd-fade-in {
+  from { opacity: 0; }
+}
+
+.hud__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.hud__time {
+  font-size: 26px;
+  color: var(--silver);
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.hud__day {
+  font-size: 11px;
+  color: var(--muted-2);
+  letter-spacing: 0.12em;
+}
+
+.hud__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hud__list .u {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+.hud__list .u__time {
+  min-width: 66px;
+  font-size: 13px;
+  /* Lighter than the brand cobalt: over a translucent card the brand cobalt
+     sat too close to the wallpaper's own blues to read at this size. */
+  color: var(--cobalt-soft);
+}
+.hud__list .u__label {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud .weekstrip {
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 0;
+}
+.hud .weekstrip__d {
+  gap: 3px;
+  color: var(--muted-2);
+}
+.hud .weekstrip__dow {
+  font-size: 10px;
+  opacity: 0.8;
+}
+.hud .weekstrip__num {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  font-size: 13.5px;
+}
+/* Today: a small cut chip with a cobalt base bar — findable at a glance
+   without being brighter than the clock above it. */
+.hud .weekstrip__d.is-today {
+  color: var(--silver);
+  text-shadow: none;
+}
+.hud .weekstrip__d.is-today .weekstrip__dow {
+  color: var(--cobalt-soft);
+  opacity: 1;
+}
+.hud .weekstrip__d.is-today .weekstrip__num {
+  background: var(--cobalt-a30);
+  box-shadow: inset 0 -2px 0 var(--cobalt-bright);
+  clip-path: polygon(
+    var(--cut-xs) 0, 100% 0, 100% calc(100% - var(--cut-xs)),
+    calc(100% - var(--cut-xs)) 100%, 0 100%, 0 var(--cut-xs)
+  );
+}
+
+.hud .muted {
+  color: var(--muted-2);
+}
+.hud__err {
+  font-size: 10px;
+  color: var(--crimson-text);
+}
+
+/* The bubble's name: a tracked caption, then a keyline that runs to the count
+   (1/3, +2) — "INTENTIONS ———— 1/3". */
+.bub__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--muted-2);
+  letter-spacing: 0.12em;
+}
+.bub__title::after {
+  content: '';
+  order: 1;
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--steel-a20), var(--steel-a06));
+  box-shadow: 0 1px 0 var(--ink-a50);
+}
+.bub__note {
+  order: 2;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--steel) 8%, transparent);
+  box-shadow: inset 0 0 0 1px var(--steel-a10);
+  color: var(--steel);
+  letter-spacing: 0.06em;
+}
+.bub__line {
+  font-size: 13px;
+  color: var(--steel);
+}
+/* Empty state (Phase 9.5): a source that isn't set up, and where to set it
+   up. Plain text — the HUD takes no clicks — in steel, not an alarm colour. */
+/* Offline (Phase 9.6): Next up says how old a failing calendar's copy is. */
+.bub__stale {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted-2);
+}
+.bub__setup {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--steel);
+}
+.bub__setup-what {
+  color: var(--silver);
+}
+.bub__setup-where {
+  color: var(--steel);
+}
+.bub__sub {
+  font-size: 11px;
+  color: var(--muted-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.u__est {
+  color: var(--muted-2);
+  font-size: 11px;
+}
+
+/* Checklists: square markers, drawn (the ○ / ● glyphs came from a fallback
+   font at a different size and baseline). Gold fill is "done". */
+.hud .chk {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+}
+.hud .chk li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud .chk li::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin: 0 9px 1px 1px;
+  border: 1.5px solid color-mix(in srgb, var(--muted-2) 85%, transparent);
+  border-radius: 1px;
+  vertical-align: middle;
+  box-shadow: 0 0 0 1px var(--ink-a70);
+}
+.hud .chk li.is-done {
+  color: var(--muted-2);
+}
+.hud .chk li.is-done::before {
+  background: var(--gold);
+  border-color: var(--gold);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+.hud .chk li.is-text::before {
+  width: 6px;
+  height: 1.5px;
+  margin: 0 10px 3px 2px;
+  border: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--muted-2) 75%, transparent);
+}
+.hud .chk li.is-text {
+  white-space: normal;
+}
+
+/* Tasks priority, drawn: one or two chevrons, up or down, in the app's own
+   colours. Crimson only for highest — that one is urgency. */
+.prio {
+  /* In em, so the mark follows the row's type through compact / standard /
+     large: ~10×11px beside 13px text. */
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.12em;
+  width: 0.78em;
+  height: 0.86em;
+  margin: 0 0.55em 0 0.05em;
+  vertical-align: -0.02em;
+  color: var(--silver);
+  /* The same ink edge as the text beside it. */
+  filter: drop-shadow(0 0 1px var(--ink)) drop-shadow(0 0 1px var(--ink));
+}
+.prio i {
+  display: block;
+  width: 100%;
+  height: 0.36em;
+  background: currentColor;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.prio--down {
+  transform: scaleY(-1);
+}
+.prio--highest {
+  color: var(--crimson-text);
+  filter: drop-shadow(0 0 1px var(--ink)) drop-shadow(0 0 1px var(--ink)) drop-shadow(0 0 3px var(--crimson-a60));
+}
+.prio--high {
+  color: var(--silver);
+}
+.prio--medium {
+  color: var(--cobalt-soft);
+}
+.prio--low,
+.prio--lowest {
+  color: var(--muted-2);
+}
+.ambient__list .prio {
+  margin-right: 0.6em;
+}
+/* A done task's priority is history, not urgency: it steps down to slate. */
+.is-done .prio {
+  color: var(--muted-2);
+  filter: drop-shadow(0 0 1px var(--ink)) drop-shadow(0 0 1px var(--ink));
+}
+
+/* Week health: a segmented meter, twenty cells. */
+.hud .meter {
+  height: 6px;
+  background: linear-gradient(var(--steel-a16), var(--steel-a16)), var(--ink-a55);
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 calc(5% - 2px), transparent calc(5% - 2px) 5%);
+  mask: repeating-linear-gradient(90deg, #000 0 calc(5% - 2px), transparent calc(5% - 2px) 5%);
+}
+.hud .meter b {
+  display: block;
+  height: 100%;
+  background: var(--cobalt-bright);
+}
+
+/* Owner-defined bubble content. */
+.bub__text {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--steel);
+  white-space: pre-wrap;
+}
+.bub__fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  font-size: 12.5px;
+}
+.bub__fields div {
+  display: contents;
+}
+.bub__fields dt {
+  font: 600 11px/1.7 var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted-2);
+}
+.bub__fields dd {
+  color: var(--silver);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Size is chosen in Display & HUD; the window width moves with it
+   (presentation.cjs SCALE), so the type has to as well. */
+.hud--compact .hud { padding: 9px 12px; }
+.hud--compact .hud__time { font-size: 21px; }
+.hud--compact .hud__list .u__label,
+.hud--compact .chk { font-size: 12px; }
+.hud--large .hud__time { font-size: 32px; }
+.hud--large .hud__list .u__label,
+.hud--large .chk,
+.hud--large .bub__line { font-size: 15px; }
+.hud--large .hud__list .u__time { font-size: 14.5px; }
+.hud--large .bub__title { font-size: 11px; }
+
+/* Width: Fit. The corner window keeps its width (it's transparent and
+   click-through, so the spare area costs nothing); the bubble shrinks to its
+   content, up to that width, and hugs the corner's side. The floor stops a
+   two-letter title shrinking a bubble to a sliver. */
+.hudstack .hud.bub--fit { width: fit-content; max-width: 100%; min-width: min(220px, 100%); align-self: flex-start; }
+.hudstack.hud--compact .hud.bub--fit { min-width: min(190px, 100%); }
+.hudstack.hud--large .hud.bub--fit { min-width: min(260px, 100%); }
+.hudstack--top-right .hud.bub--fit,
+.hudstack--bottom-right .hud.bub--fit,
+.pres__previewstack .hud.bub--fit { align-self: flex-end; }
+
+/* ---- Phase 6 §1 — pre-block escalation (HUD only) ----
+   Crimson is the app's urgency colour and this is its legitimate second use;
+   the ambient overlay never shows it. Passive by construction: the row it is
+   already showing changes state, and it clears itself at the block's start.
+   A cut strip with a crimson spine and a dark base under the tint, so the red
+   keeps its contrast over a light window rather than turning pink. */
+.hud .u--imminent {
+  align-items: center;
+  margin: 1px -8px;
+  padding: 4px 8px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--crimson-bright) 26%, transparent), color-mix(in srgb, var(--crimson-bright) 10%, transparent)),
+    color-mix(in srgb, var(--bg-0) 60%, transparent);
+  box-shadow: inset 2px 0 0 var(--crimson-bright);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut-sm)), calc(100% - var(--cut-sm)) 100%, 0 100%);
+}
+.hud .u--imminent .u__time {
+  color: var(--crimson-text);
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: var(--halo), 0 0 10px color-mix(in srgb, var(--crimson-bright) 55%, transparent);
+}
+.hud .u--imminent .u__label {
+  color: var(--silver);
+}
+
+/* ---- Phase 6 §2 — focus mode ----
+   One block, one number. Not a Pomodoro app: no rings, no phases, no sound. */
+.focus {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0 2px;
+}
+.focus__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--cobalt-soft);
+}
+.focus__label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--cobalt-soft-a35), transparent);
+}
+.focus__title {
+  margin: 0;
+  font-size: 14px;
+  color: var(--silver);
+}
+.focus__left {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 40px;
+  line-height: 1;
+  color: var(--cobalt-soft);
+  text-shadow: var(--halo), 0 0 18px var(--cobalt-a45);
+}
+.focus--over .focus__left {
+  color: var(--crimson-text);
+  text-shadow: var(--halo), 0 0 18px color-mix(in srgb, var(--crimson-bright) 45%, transparent);
+}
+/* It says where its controls are, since it hasn't any. */
+.focus__hint {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--muted-2);
+}
+
+/* §3 — week health on the idle screen: one line of large type, not tiles. */
+.ambient__health {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  color: var(--steel);
+  opacity: 0.9;
+}
+/* Sunday evening it stops reporting and asks. Cobalt: it's an invitation. */
+.ambient__health.is-review {
+  color: var(--cobalt-bright);
+  text-shadow: 0 0 22px var(--cobalt-a45), 0 1px 12px color-mix(in srgb, var(--ink) 75%, transparent);
+}
+
+/* §4 — a soft glow so the idle panels read as sitting *in* the desktop
+   background rather than parked on top of it. */
+.ambient__sec {
+  padding: 2px 4px;
+  box-shadow: 0 0 46px 18px color-mix(in srgb, var(--bg-0) 16%, transparent);
+}
+.ambient__nextup {
+  padding: 20px 32px 22px;
+}
+.ambient__thisweek,
+.ambient__nextup {
+  backdrop-filter: blur(0.5px);
+}
+
+/* =============================================================================
+   The idle overlay, stand-alone (Phase 9.5)
+   With no live wallpaper behind it, the overlay is a scrim over whatever is on
+   the desktop: a white document, a photo, a dark editor. It dims all of it on
+   purpose, deeper at the edges, with a faint cobalt light from the top left,
+   and sets a soft pool of ink behind each block of text so body text holds
+   4.5:1 even over a white window (design-shots contrast). ambient--live keeps
+   the old light scrim for an add-on that draws a wallpaper behind it.
+   ============================================================================= */
+
+.ambient--alone {
+  --scrim-inner: color-mix(in srgb, var(--ink) 60%, transparent);
+  --scrim-outer: color-mix(in srgb, var(--ink) 78%, transparent);
+  --pool: color-mix(in srgb, var(--ink) 62%, transparent);
+  background:
+    radial-gradient(70% 60% at 18% 6%, color-mix(in srgb, var(--cobalt) 16%, transparent), transparent 70%),
+    radial-gradient(120% 95% at 50% 42%, var(--scrim-inner) 0%, var(--scrim-outer) 88%);
+  box-shadow: inset 0 0 240px 90px color-mix(in srgb, var(--ink) 34%, transparent);
+}
+/* Each block of text sits on a soft pool of ink: a blurred plate behind it,
+   so there is no edge to see, only the desktop getting darker under words. */
+.ambient--alone > .ambient__clock,
+.ambient--alone > .ambient__thisweek,
+.ambient--alone > .ambient__nextup,
+.ambient--alone > .ambient__health,
+.ambient--alone > .weekstrip {
+  position: relative;
+  isolation: isolate;
+  /* base.css gives two of these a 0.5px backdrop blur, which would clip the
+     pool to their box; over a transparent window it blurs nothing anyway. */
+  backdrop-filter: none;
+}
+.ambient--alone > .ambient__clock::before,
+.ambient--alone > .ambient__thisweek::before,
+.ambient--alone > .ambient__nextup::before,
+.ambient--alone > .ambient__health::before,
+.ambient--alone > .weekstrip::before {
+  content: '';
+  position: absolute;
+  inset: -22px -36px;
+  z-index: -1;
+  border-radius: 40px;
+  background: var(--pool);
+  filter: blur(22px);
+  pointer-events: none;
+}
+.ambient--alone > .ambient__clock,
+.ambient--alone > .ambient__thisweek,
+.ambient--alone > .ambient__health,
+.ambient--alone > .weekstrip {
+  align-self: flex-start;
+}
+.ambient--alone > .weekstrip {
+  align-self: center;
+}
+/* The brand cobalt is too dark to carry small type over a dimmed white
+   window; the times take the HUD's lighter cobalt, as its bubbles do. */
+.ambient--alone .ambient__next .u__time {
+  color: var(--cobalt-soft);
+}
+
+/* ---------- Quick capture ----------
+   One field in a small HUD plate, gone on Esc or blur. */
+.capture {
+  --cut: 12px;
+  --tick-c: var(--cobalt-bright);
+  height: 100vh;
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  background:
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--steel) 2%, transparent) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 97%, transparent), color-mix(in srgb, var(--bg-0) 97%, transparent));
+}
+.capture__label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--cobalt-soft);
+}
+/* NB: --ink (#040d1a) is *linework*, not text. Bright text in this palette is
+   --silver / --steel. Using --ink here painted the typed line near-black on a
+   near-black panel — invisible, and invisible only in pixels: the DOM checks
+   all passed. */
+.capture__input {
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--steel-a16);
+  padding: 4px 0;
+  font: inherit;
+  font-size: 15px;
+  color: var(--silver);
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-blade), box-shadow var(--dur-fast) var(--ease-blade);
+}
+.capture__input::placeholder {
+  color: color-mix(in srgb, var(--slate) 80%, transparent);
+}
+.capture__input:focus {
+  border-bottom-color: var(--cobalt-bright);
+  box-shadow: 0 1px 0 var(--cobalt-bright), 0 8px 14px -12px var(--cobalt-a80);
+}
+.capture__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--slate);
+}
+
+/* =============================================================================
+   Controls — shared by the Display & HUD window and arrange mode
+   ============================================================================= */
+
+.pres .btn,
+.hudstack .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: var(--control-h);
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--steel);
+  font: 600 13px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-soft), color var(--dur-fast) var(--ease-soft),
+    border-color var(--dur-fast) var(--ease-soft);
+}
+.pres .btn:hover:not(:disabled),
+.hudstack .btn:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: color-mix(in srgb, var(--cobalt-soft) 30%, transparent);
+  color: var(--silver);
+}
+/* The primary action is a small blade plate. A clipped box can't show an
+   outer ring, so its focus ring is drawn inside, in silver. */
+.pres .btn--primary,
+.hudstack .btn--primary {
+  --cut: var(--cut-sm);
+  clip-path: var(--plate);
+  background: var(--cobalt);
+  color: var(--silver);
+  font-weight: 700;
+}
+.pres .btn--primary:hover:not(:disabled),
+.hudstack .btn--primary:hover:not(:disabled) {
+  background: var(--cobalt-bright);
+  border-color: transparent;
+  color: var(--silver);
+}
+.pres .btn--primary:focus-visible,
+.hudstack .btn--primary:focus-visible {
+  outline: 2px solid var(--silver);
+  outline-offset: -5px;
+}
+.pres .btn--ghost,
+.hudstack .btn--ghost {
+  background: transparent;
+  border-color: var(--hairline-2);
+}
+.pres .btn--quiet {
+  background: transparent;
+  color: var(--slate);
+  padding: 0 10px;
+}
+/* Destructive: quiet until hovered (or focused), then unmistakably crimson. */
+.pres .btn--danger {
+  background: transparent;
+  color: var(--slate);
+  border-color: var(--hairline-2);
+}
+.pres .btn--danger:focus-visible {
+  color: var(--crimson-bright);
+}
+.pres .btn--danger:hover:not(:disabled) {
+  background: var(--crimson-a14);
+  border-color: var(--crimson-a60);
+  color: var(--crimson-bright);
+}
+.pres .btn--icon,
+.hudstack .btn--icon {
+  width: var(--control-h);
+  padding: 0;
+  background: transparent;
+  color: var(--slate);
+}
+.pres .btn--sm {
+  width: 32px;
+  height: 32px;
+}
+.pres .btn:disabled,
+.hudstack .btn:disabled {
+  opacity: 0.35;
+}
+.ico {
+  flex: none;
+  display: block;
+}
+
+/* Switch. The checkbox is kept (and focusable) — only its look is replaced:
+   a square-cornered track with a sliding block, lit cobalt when on. */
+.tgl {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--steel);
+  user-select: none;
+}
+.tgl input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.tgl__track {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  background: var(--steel-a10);
+  box-shadow: inset 0 0 0 1px var(--steel-a20);
+  transition: background var(--dur-fast) var(--ease-soft), box-shadow var(--dur-fast) var(--ease-soft);
+}
+.tgl__track::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--slate);
+  transition: transform var(--dur-fast) var(--ease-blade), background var(--dur-fast) var(--ease-soft);
+}
+.tgl input:checked + .tgl__track {
+  background: var(--cobalt);
+  box-shadow: inset 0 0 0 1px var(--cobalt-bright), 0 0 10px var(--cobalt-a35);
+}
+.tgl input:checked + .tgl__track::after {
+  transform: translateX(16px);
+  background: var(--silver);
+}
+.tgl input:focus-visible + .tgl__track {
+  outline: 2px solid var(--cobalt-bright);
+  outline-offset: 2px;
+}
+.tgl:hover .tgl__track {
+  box-shadow: inset 0 0 0 1px var(--cobalt-soft-a50);
+}
+.tgl:hover input:checked + .tgl__track {
+  background: var(--cobalt-bright);
+}
+.tgl__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tgl--sm {
+  gap: 7px;
+  font-size: 12px;
+  color: var(--slate);
+}
+.tgl--sm .tgl__track {
+  width: 30px;
+  height: 18px;
+}
+.tgl--sm .tgl__track::after {
+  top: 4px;
+  left: 4px;
+  width: 10px;
+  height: 10px;
+}
+.tgl--sm input:checked + .tgl__track::after {
+  transform: translateX(12px);
+}
+
+/* Segmented control: square cells, the chosen one lit with a cobalt base bar. */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-sm);
+  background: var(--surface-0);
+  box-shadow: inset 0 0 0 1px var(--hairline-2);
+}
+.seg button {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 1px;
+  background: transparent;
+  color: var(--slate);
+  font: 600 12.5px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: background var(--dur-fast) var(--ease-soft), color var(--dur-fast) var(--ease-soft);
+}
+.seg button:hover:not(:disabled) {
+  color: var(--silver);
+  background: var(--accent-wash-2);
+}
+.seg button.is-on {
+  background: var(--accent-wash);
+  color: var(--silver);
+  box-shadow: inset 0 -2px 0 var(--cobalt-bright);
+}
+
+/* =============================================================================
+   The Display & HUD window
+   ============================================================================= */
+
+.pres {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-0);
+  color: var(--steel);
+}
+.pres--wide {
+  width: min(1160px, 96vw);
+  height: min(820px, 92vh);
+  max-height: none;
+}
+
+/* Header = the title bar. A keyline along its foot with a cobalt run under
+   the title. */
+.pres__head {
+  gap: 24px;
+  padding: 14px 16px 14px 24px;
+  background:
+    linear-gradient(var(--cobalt-bright), var(--cobalt-bright)) left 24px bottom / 44px 2px no-repeat,
+    linear-gradient(var(--hairline-2), var(--hairline-2)) left bottom / 100% 1px no-repeat,
+    var(--surface-0);
+}
+.pres__head .q-title {
+  font-size: 18px;
+  letter-spacing: 0.08em;
+}
+/* The Bubbles / Screens tabs: tracked caps with a lit base bar, not a pill. */
+.pres__head .pres__tabs {
+  padding: 0;
+  gap: 4px;
+  background: none;
+  box-shadow: none;
+}
+.modal__head .pres__tabs button {
+  /* beat the shared .modal__head button reset */
+  height: 34px;
+  padding: 0 16px;
+  color: var(--slate);
+  font: 600 13.5px var(--font-display);
+  letter-spacing: 0.14em;
+}
+.modal__head .pres__tabs button:hover:not(:disabled) {
+  color: var(--silver);
+  background: var(--accent-wash-2);
+}
+.modal__head .pres__tabs button.is-on {
+  color: var(--silver);
+  background: linear-gradient(0deg, var(--accent-wash), transparent);
+  box-shadow: inset 0 -2px 0 var(--cobalt-bright);
+}
+
+.pres__foot {
+  gap: 10px;
+  padding: 14px 20px 14px 16px;
+  background:
+    linear-gradient(var(--hairline-2), var(--hairline-2)) left top / 100% 1px no-repeat,
+    var(--surface-0);
+}
+.pres__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 6px;
+  font-size: 12px;
+  color: var(--slate);
+}
+/* A small steady status light: "this is live". Cobalt, and it doesn't pulse —
+   the HUD is meant to be calm even while you edit it. */
+.pres__live {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--cobalt-bright);
+  box-shadow: 0 0 8px var(--cobalt-a80);
+}
+
+/* Fields. Native inputs, selects and textareas, restyled (not replaced):
+   square, a stronger keyline along the foot, and focus lights that foot
+   cobalt with a soft glow instead of a second ring. */
+.pres input:not([type='checkbox']):not([type='range']),
+.pres select,
+.pres textarea {
+  height: var(--control-h);
+  padding: 0 12px;
+  border: 1px solid var(--hairline-2);
+  border-bottom-color: var(--steel-a22);
+  border-radius: var(--r-sm);
+  background-color: var(--surface-2);
+  color: var(--silver);
+  font: 400 13px var(--font-body);
+  transition: border-color var(--dur-fast) var(--ease-soft), background-color var(--dur-fast) var(--ease-soft),
+    box-shadow var(--dur-fast) var(--ease-soft);
+}
+.pres select {
+  padding-right: 32px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%237fb0e3' stroke-width='1.5' stroke-linecap='square'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  cursor: pointer;
+}
+.pres select option {
+  background: var(--bg-1);
+  color: var(--steel);
+}
+.pres textarea {
+  height: auto;
+  min-height: 96px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.pres input::placeholder,
+.pres textarea::placeholder {
+  color: color-mix(in srgb, var(--slate) 75%, transparent);
+}
+.pres input:not([type='checkbox']):not([type='range']):hover,
+.pres select:hover,
+.pres textarea:hover {
+  border-color: var(--steel-a20);
+  border-bottom-color: var(--cobalt-soft-a50);
+}
+.pres input:not([type='checkbox']):not([type='range']):focus,
+.pres select:focus,
+.pres textarea:focus {
+  border-color: var(--cobalt-a55);
+  border-bottom-color: var(--cobalt-bright);
+  background-color: color-mix(in srgb, var(--surface-2) 88%, var(--cobalt-bright));
+}
+.pres :is(input:not([type='checkbox']):not([type='range']), select, textarea):focus-visible {
+  outline: none;
+  box-shadow: inset 0 -1px 0 var(--cobalt-bright), 0 0 0 3px color-mix(in srgb, var(--cobalt-bright) 22%, transparent), 0 0 16px color-mix(in srgb, var(--cobalt-bright) 18%, transparent);
+}
+/* Times are a numeric readout: Rajdhani, tabular, the focused part lit. */
+.pres input[type='time'] {
+  width: 118px;
+  color-scheme: dark;
+  font: 600 14.5px var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.pres input[type='time']::-webkit-datetime-edit-hour-field:focus,
+.pres input[type='time']::-webkit-datetime-edit-minute-field:focus,
+.pres input[type='time']::-webkit-datetime-edit-ampm-field:focus {
+  background: var(--cobalt);
+  color: var(--silver);
+  border-radius: 1px;
+}
+.pres input[type='time']::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+}
+.pres input[type='time']::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+/* A plain checkbox (the per-bubble "HUD default"), restyled in place. */
+.fld-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 32px;
+  font-size: 13px;
+  color: var(--steel);
+  cursor: pointer;
+}
+.fld-check input[type='checkbox'] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  appearance: none;
+  border: 1.5px solid var(--steel-a40);
+  border-radius: var(--r-sm);
+  background: var(--surface-2) center / 12px no-repeat;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-soft), border-color var(--dur-fast) var(--ease-soft);
+}
+.fld-check:hover input[type='checkbox'] {
+  border-color: color-mix(in srgb, var(--cobalt-soft) 70%, transparent);
+}
+.fld-check input[type='checkbox']:checked {
+  border-color: var(--cobalt-bright);
+  background-color: var(--cobalt);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.5 9.5 3.5' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='square'/%3E%3C/svg%3E");
+  box-shadow: 0 0 8px var(--cobalt-a40);
+}
+
+/* Plates: the grouping unit of both tabs. The heading is a tracked caption;
+   the hint under it stays a sentence. */
+.card {
+  --cut: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px 20px;
+  background: var(--surface-1);
+}
+.card__head h3 {
+  font: 700 14px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--silver);
+}
+.card__head p {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--slate);
+}
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.card__foot {
+  display: flex;
+  gap: 8px;
+}
+
+/* Calendar card: a status light beside the account. Cobalt when the sync is
+   healthy, crimson when it's failing (urgency), slate when off. */
+.cal-state {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--slate);
+  opacity: 0.6;
+}
+.cal-state.is-ok {
+  background: var(--cobalt-bright);
+  opacity: 1;
+  box-shadow: 0 0 8px var(--cobalt-a80);
+}
+/* Recurring blocks card (Phase 9.4): the add/edit form. */
+.blk-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.blk-edit__days {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.blk-edit__day {
+  min-width: 44px;
+  padding: 4px 8px;
+  border: 1px solid var(--ink-a70, rgba(255, 255, 255, 0.2));
+  background: transparent;
+  color: var(--slate);
+  cursor: pointer;
+}
+.blk-edit__day.is-on {
+  border-color: var(--cobalt-bright);
+  color: var(--silver);
+  background: color-mix(in srgb, var(--cobalt-bright) 18%, transparent);
+}
+.blk-edit__times {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--slate);
+}
+/* Calendars card (Phase 9.4): the add-a-link form and the empty line. */
+.cal-add {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 3fr;
+  gap: 8px;
+}
+.cal-add .card__note {
+  grid-column: 1 / -1;
+}
+.card__note,
+.card__empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--slate);
+}
+.cal-state.is-bad {
+  background: var(--crimson-bright);
+  opacity: 1;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--crimson-bright) 70%, transparent);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 12px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--cobalt-soft);
+}
+
+/* ---- Bubbles tab ---- */
+
+.bub-ed {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 284px 1fr;
+}
+
+.bub-ed__list {
+  overflow: auto;
+  padding: 16px 12px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: var(--bg-0);
+  box-shadow: inset -1px 0 0 var(--hairline-2);
+}
+.bub-ed__actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.bub-ed__actions .btn {
+  width: 100%;
+}
+
+.bub-ed__corner header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 6px 6px 8px;
+  margin-bottom: 4px;
+  background: linear-gradient(90deg, var(--hairline-2), transparent) left bottom / 100% 1px no-repeat;
+}
+.bub-ed__cornername {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 12.5px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted-2);
+}
+.bub-ed__corner ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bub-ed__corner li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 4px 4px 4px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-soft), box-shadow var(--dur-fast) var(--ease-soft);
+}
+.bub-ed__corner li:hover {
+  background: var(--accent-wash-2);
+}
+/* The chosen bubble: a wash and a lit cobalt spine. */
+.bub-ed__corner li.is-sel {
+  background: linear-gradient(90deg, var(--accent-wash), color-mix(in srgb, var(--cobalt-bright) 6%, transparent));
+  box-shadow: inset 2px 0 0 var(--cobalt-bright);
+}
+.pres .bub-ed__pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.bub-ed__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--silver);
+}
+.bub-ed__kind {
+  font-size: 11.5px;
+  color: var(--slate);
+}
+.bub-ed__corner li.is-off .bub-ed__name {
+  color: var(--slate);
+}
+/* Reorder arrows appear on the row you're pointing at, the selected row, or
+   when tabbed to — present for the keyboard, absent from the resting list. */
+.bub-ed__order {
+  display: flex;
+  gap: 0;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-soft);
+}
+.bub-ed__corner li:hover .bub-ed__order,
+.bub-ed__corner li.is-sel .bub-ed__order,
+.bub-ed__order:focus-within {
+  opacity: 1;
+}
+.bub-ed__corner li.bub-ed__empty {
+  min-height: 36px;
+  padding-left: 12px;
+  font-size: 12px;
+  color: var(--slate);
+  cursor: default;
+  background: none;
+  box-shadow: none;
+}
+
+/* The corner as a tiny screen: which quarter is lit. */
+.cglyph {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 12px;
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--muted-2) 55%, transparent);
+}
+.cglyph::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 4px;
+  background: var(--cobalt-soft);
+}
+.cglyph--top-left::after { top: 2px; left: 2px; }
+.cglyph--top-right::after { top: 2px; right: 2px; }
+.cglyph--bottom-left::after { bottom: 2px; left: 2px; }
+.cglyph--bottom-right::after { bottom: 2px; right: 2px; }
+
+.bub-ed__form {
+  overflow: auto;
+  padding: 24px 24px 32px;
+}
+.bub-ed__none {
+  margin-top: 40px;
+  text-align: center;
+  color: var(--slate);
+}
+
+.bform {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 292px;
+  gap: 24px;
+  align-items: start;
+}
+.bform__main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.bform__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 4px 4px;
+}
+.bform__id {
+  min-width: 0;
+}
+.bform__title,
+.tpl__head h3 {
+  margin-top: 6px;
+  font: 700 26px/1.1 var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--silver);
+}
+.bform__type {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--slate);
+}
+.bform__more {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.bform__preview {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bform__previewhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 4px;
+  font: 600 12.5px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted-2);
+}
+.bform__previewnow {
+  font: 400 11.5px var(--font-body);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--slate);
+}
+/* The preview draws a real bubble on the window's opaque background, so it
+   gets a stand-in desktop — a dusk wash under a faint grid — framed with
+   corner brackets like a viewfinder. */
+.pres__previewstack {
+  position: relative;
+  padding: 22px 16px;
+  background:
+    linear-gradient(color-mix(in srgb, var(--steel) 3.5%, transparent) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(90deg, color-mix(in srgb, var(--steel) 3.5%, transparent) 1px, transparent 1px) 0 0 / 16px 16px,
+    radial-gradient(90% 70% at 80% 100%, color-mix(in srgb, var(--bg-2) 35%, transparent), transparent 70%),
+    radial-gradient(80% 60% at 20% 10%, var(--bg-2), transparent 70%),
+    var(--bg-0);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  --bk-c: var(--cobalt-soft-a55);
+  --bk-l: 12px;
+}
+.pres__previewstack.is-ruled .bub {
+  opacity: 0.5;
+}
+.pres__why {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--accent-wash-2);
+  box-shadow: inset 2px 0 0 var(--cobalt-bright);
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--steel);
+}
+.pres__why .ico {
+  margin-top: 1px;
+  color: var(--cobalt-soft);
+}
+.pres__why b {
+  font-weight: 600;
+  color: var(--silver);
+}
+
+/* Fields. The label is a tracked caption over the control. */
+.fld {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.fld__label {
+  font: 600 12px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted-2);
+}
+.fld__control {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.fld__control > input:not([type='checkbox']):not([type='time']),
+.fld__control > select,
+.fld__control > textarea {
+  flex: 1;
+  min-width: 0;
+}
+.fld__hint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--slate);
+}
+/* "The note exists" is a plain confirmation, not an achievement — cobalt, not
+   gold. A missing note is a problem to fix, so it gets a softened crimson. */
+.fld__hint .ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--cobalt-soft);
+}
+.fld__hint .warn {
+  color: color-mix(in srgb, var(--crimson-bright) 45%, var(--silver));
+}
+.fld-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  align-items: flex-start;
+}
+.fld-row > .fld {
+  flex: 1 1 160px;
+  max-width: 240px;
+}
+/* The corner picker has a natural size; let it keep it. */
+.fld-row > .fld:has(.cpick) {
+  flex: none;
+  max-width: none;
+}
+.fld-row--3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.fld-row--3 > .fld {
+  max-width: none;
+}
+
+/* Corner picker: a little screen, click the corner you want. */
+.cpick {
+  display: grid;
+  grid-template-columns: repeat(2, 118px);
+  gap: 6px;
+  padding: 6px;
+  border-radius: var(--r-sm);
+  background: var(--surface-0);
+  box-shadow: inset 0 0 0 1px var(--hairline-2);
+}
+.pres .cpick button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 1px;
+  background: transparent;
+  color: var(--slate);
+  font: 500 12.5px var(--font-body);
+}
+.pres .cpick button:nth-child(even) {
+  justify-content: flex-end;
+}
+.pres .cpick button:hover:not(:disabled) {
+  background: var(--accent-wash-2);
+  color: var(--silver);
+}
+.pres .cpick button.is-on {
+  background: var(--accent-wash);
+  color: var(--silver);
+  box-shadow: inset 0 0 0 1px var(--cobalt-a55);
+}
+.cpick__lock {
+  display: inline-flex;
+  color: var(--slate);
+}
+
+/* Chips — square tags; a tick says "on" as well as the colour does. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.pres .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--steel);
+  font: 500 12.5px var(--font-body);
+  transition: background var(--dur-fast) var(--ease-soft), border-color var(--dur-fast) var(--ease-soft);
+}
+.pres .chip:hover:not(:disabled) {
+  background: var(--accent-wash-2);
+  border-color: var(--cobalt-a40);
+  color: var(--silver);
+}
+.pres .chip.is-on {
+  padding-left: 9px;
+  border-color: var(--cobalt-a55);
+  background: var(--accent-wash);
+  color: var(--silver);
+}
+.pres .chip.is-on .ico {
+  color: var(--cobalt-soft);
+}
+.pres input.chip-input {
+  width: 96px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px dashed var(--hairline-2);
+  background: transparent;
+  font-size: 12.5px;
+}
+
+/* Days — square keys. */
+.days {
+  display: flex;
+  gap: 6px;
+}
+.pres .day {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--slate);
+  font: 600 13px var(--font-display);
+  text-transform: uppercase;
+}
+.pres .day:hover:not(:disabled) {
+  background: var(--accent-wash-2);
+  color: var(--silver);
+  border-color: var(--cobalt-a40);
+}
+.pres .day.is-on {
+  border-color: var(--cobalt-bright);
+  background: var(--cobalt);
+  color: var(--silver);
+  box-shadow: 0 0 8px var(--cobalt-a35);
+}
+
+.hours {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.hours__range {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.hours__to {
+  font-size: 12.5px;
+  color: var(--slate);
+}
+
+/* Background slider: a ruled track (a tick every 10%) and a bar thumb. */
+.slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+}
+.slider--bubble {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.slider input[type='range'] {
+  flex: 1;
+  height: 32px;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.slider input[type='range']::-webkit-slider-runnable-track {
+  height: 10px;
+  background:
+    linear-gradient(var(--steel-a22), var(--steel-a22)) center / 100% 2px no-repeat,
+    repeating-linear-gradient(90deg, var(--steel-a28) 0 1px, transparent 1px 10%) left center / calc(100% - 1px) 6px no-repeat;
+}
+.slider input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 8px;
+  height: 20px;
+  margin-top: -5px;
+  border-radius: 1px;
+  background: var(--cobalt-bright);
+  box-shadow: 0 0 0 3px var(--cobalt-a20), 0 0 10px var(--cobalt-a60);
+}
+.slider input[type='range']:hover::-webkit-slider-thumb {
+  background: var(--cobalt-soft);
+}
+.slider input[type='range']:focus-visible {
+  outline: 2px solid var(--cobalt-bright);
+  outline-offset: 2px;
+}
+.slider__value {
+  min-width: 44px;
+  text-align: right;
+  font: 600 14px var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--silver);
+}
+
+/* ---- template picker ---- */
+
+.tpl {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 860px;
+}
+.tpl__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.tpl__lede {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--slate);
+}
+.tpl__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.pres .tpl__card {
+  --cut: 10px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 0;
+  background: var(--surface-1);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-soft);
+}
+.pres .tpl__card:hover:not(:disabled) {
+  --edge: var(--cobalt-a45);
+  --edge-trail: var(--cobalt-a60);
+  background: color-mix(in srgb, var(--surface-1) 50%, var(--surface-2));
+}
+.pres .tpl__card:focus-visible {
+  outline-offset: -4px;
+}
+.tpl__icon {
+  --cut: var(--cut-sm);
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  clip-path: var(--plate);
+  background: var(--accent-wash);
+  color: var(--cobalt-soft);
+}
+.tpl__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.tpl__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--silver);
+}
+.tpl__hint {
+  font-size: 12.5px;
+  color: var(--slate);
+}
+.tpl__kind {
+  align-self: start;
+  padding: 2px 7px;
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 0 0 1px var(--hairline-2);
+  font: 600 11px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--slate);
+  white-space: nowrap;
+}
+
+/* ---- Screens tab ---- */
+
+.pres__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-content: start;
+}
+.pres__body .card {
+  gap: 4px;
+}
+.pres__body .card__head {
+  margin-bottom: 10px;
+}
+.srow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 8px 0;
+  border-top: 1px solid var(--hairline);
+}
+.srow__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.srow__label {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--silver);
+}
+.srow__hint {
+  font-size: 12px;
+  color: var(--slate);
+}
+.srow__control select {
+  min-width: 190px;
+}
+.pres__body .card__foot {
+  padding-top: 12px;
+}
+
+/* =============================================================================
+   Arrange mode — the HUD's one clickable state
+   The corner becomes a viewfinder: corner brackets and a faint dashed frame
+   say "being edited", every bubble gets a bar, and everything is solid enough
+   to hit reliably over whatever window is behind it.
+   ============================================================================= */
+
+.hudstack.is-arranging {
+  position: relative;
+  gap: 8px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--bg-0) 42%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cobalt-soft) 14%, transparent);
+  --bk-c: color-mix(in srgb, var(--cobalt-soft) 75%, transparent);
+  --bk-l: 18px;
+  --bk-w: 2px;
+  transition: background var(--dur-fast) var(--ease-soft), box-shadow var(--dur-fast) var(--ease-soft);
+}
+/* Drop target: cobalt, not gold (gold means done). The brackets and edge
+   light up and the corner glows — "let go here". */
+.hudstack.is-drop-target {
+  background: color-mix(in srgb, var(--cobalt) 28%, transparent);
+  box-shadow: inset 0 0 0 1px var(--cobalt-bright), inset 0 0 40px color-mix(in srgb, var(--cobalt-bright) 28%, transparent);
+  --bk-c: var(--cobalt-bright);
+  --bk-l: 26px;
+  --bk-w: 3px;
+}
+
+.arr__corner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+  font: 700 12.5px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--silver);
+  text-shadow: var(--halo);
+}
+.arr__corner .cglyph {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--steel) 60%, transparent);
+}
+.arr__private {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--r-sm);
+  background: var(--steel-a10);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--steel) 14%, transparent);
+  font: 600 11px var(--font-display);
+  letter-spacing: 0.1em;
+  color: var(--steel);
+}
+
+/* While arranging, legibility beats see-through: the corners sit over whatever
+   you were working in, and you're about to click them. */
+.hudstack.is-arranging .hud {
+  background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+}
+.hud.arr {
+  gap: 8px;
+  padding-top: 8px;
+}
+/* The bar already names the bubble; keep only the caption's count (1/3). */
+.hud.arr .bub__title {
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+.hud.arr .bub__title::after,
+.hud.arr .bub__title > span:first-child {
+  display: none;
+}
+.hud.arr.is-ruled > :not(.arr__bar) {
+  opacity: 0.45;
+}
+/* Being dragged: the plate's keyline lights cobalt all the way round. */
+.hud.arr.is-dragging {
+  opacity: 0.55;
+  --edge: var(--cobalt-bright);
+  --edge-lead: var(--cobalt-bright);
+  --edge-trail: var(--cobalt-bright);
+}
+.arr__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 -8px 0 -10px;
+  min-height: 30px;
+  text-shadow: none;
+}
+.hudstack .arr__bar .btn--icon {
+  width: 28px;
+  height: 28px;
+  color: var(--muted-2);
+}
+.hudstack .arr__bar .btn--icon:hover:not(:disabled) {
+  background: var(--steel-a10);
+  color: var(--silver);
+}
+.hudstack .arr__grip {
+  cursor: grab;
+  touch-action: none;
+}
+.hudstack .arr__grip:active {
+  cursor: grabbing;
+}
+.arr__name {
+  min-width: 0;
+  font: 700 13px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--silver);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Why a bubble is hidden right now — information, so a cobalt tag. */
+.arr__why {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  background: var(--accent-wash);
+  box-shadow: inset 2px 0 0 var(--cobalt-bright);
+  color: var(--cobalt-soft);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.arr__tools {
+  margin-left: auto;
+  display: flex;
+  gap: 1px;
+}
+/* Switching a bubble off is undoable, so it only warms on hover. */
+.hudstack .arr__tools .arr__off:hover:not(:disabled) {
+  color: color-mix(in srgb, var(--crimson-bright) 38%, var(--silver));
+  background: var(--crimson-a14);
+}
+.arr__empty,
+.arr__hint {
+  font-size: 12px;
+  color: var(--slate);
+}
+.arr__hint {
+  padding: 18px 8px;
+  text-align: center;
+}
+.arr__foot {
+  display: flex;
+  gap: 6px;
+  padding-top: 2px;
+}
+.hudstack .arr__foot .btn {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  background: color-mix(in srgb, var(--surface-2) 95%, transparent);
+  border-color: color-mix(in srgb, var(--steel) 12%, transparent);
+}
+.hudstack .arr__foot .btn:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.hudstack .arr__foot .btn--primary {
+  margin-left: auto;
+  padding: 0 20px;
+  background: var(--cobalt);
+}
+.hudstack .arr__foot .btn--primary:hover:not(:disabled) {
+  background: var(--cobalt-bright);
+}
+.hudstack .arr__foot .btn.is-on {
+  background: var(--surface-3);
+  border-color: color-mix(in srgb, var(--cobalt-soft) 40%, transparent);
+  color: var(--silver);
+}
+.arr__add {
+  --cut: 10px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: color-mix(in srgb, var(--bg-1) 96%, transparent);
+}
+.arr__addhead {
+  padding: 4px 8px;
+  font: 600 11px var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--slate);
+}
+/* Menu rows are names, so they read as names: sentence case. */
+.hudstack .arr__add .btn {
+  width: 100%;
+  justify-content: flex-start;
+  height: 34px;
+  background: transparent;
+  font: 500 13px var(--font-body);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.hudstack .arr__add .btn:hover:not(:disabled) {
+  background: var(--accent-wash);
+  border-color: transparent;
+}
+.hudstack .arr__add .arr__new {
+  color: var(--cobalt-soft);
+}
+
+/* =============================================================================
+   Now playing (Spotify via Songify)
+   Cover, then two lines. The cover is the only colour in the bubble, which is
+   what makes it findable at a glance; --np-accent (the cover's colour, from
+   electron/songify.cjs) tints the plate's keyline and a glow inside it.
+   ============================================================================= */
+
+.np { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.np__art {
+  --cut: var(--cut-sm);
+  width: 46px;
+  height: 46px;
+  flex: none;
+  object-fit: cover;
+  clip-path: var(--plate);
+}
+.np__art--none { display: grid; place-items: center; background: var(--steel-a10); color: var(--slate); font-size: 18px; }
+.np__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.np__cap { display: inline-flex; align-items: center; gap: 7px; font-size: 10px; letter-spacing: 0.14em; color: var(--muted-2); }
+.np__title, .np__artist { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np__title { font-size: 13.5px; color: var(--silver); }
+/* Full steel, no fade: the dimmest line was the one a busy window behind
+   the bubble drowned out first. */
+.np__artist { font-size: 12px; color: var(--steel); }
+.hud--compact .np__art { width: 38px; height: 38px; }
+.hud--large .np__art { width: 56px; height: 56px; }
+.hud--large .np__title { font-size: 15.5px; }
+
+/* Registered as a <color> so a song change fades between colours instead of
+   snapping. The glow stays *inside* the plate: each corner window is sized to
+   its content, and the plate is clipped anyway. */
+@property --np-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #3e86cc; /* = --cobalt-bright; @property needs a literal */
+}
+.hud.bub--nowplaying {
+  --tick-c: var(--np-accent);
+  transition: --np-accent 900ms ease;
+  --edge-lead: color-mix(in srgb, var(--np-accent) 85%, white 10%);
+  --edge: color-mix(in srgb, var(--np-accent) 34%, transparent);
+  --edge-trail: color-mix(in srgb, var(--np-accent) 55%, transparent);
+  background:
+    radial-gradient(130% 150% at 0% 50%, color-mix(in srgb, var(--np-accent) 26%, transparent), transparent 70%),
+    var(--bub-scan),
+    var(--bub-fill);
+  box-shadow: inset 0 0 22px -6px color-mix(in srgb, var(--np-accent) 55%, transparent);
+}
+.hudstack.is-arranging .hud.bub--nowplaying {
+  background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+}
+
+/* Song change: the bubble content is re-keyed per track (widgets.tsx), so this
+   entrance runs once per new song. The text swipes in from the corner's side;
+   the cover leads it by a beat with a small settle, like a card being dealt. */
+@keyframes np-swipe-r { from { opacity: 0; transform: translateX(28px); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes np-swipe-l { from { opacity: 0; transform: translateX(-28px); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes np-deal { from { opacity: 0; transform: translateX(18px) rotate(6deg) scale(0.9); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes np-deal-l { from { opacity: 0; transform: translateX(-18px) rotate(-6deg) scale(0.9); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+.np--from-right .np__text { animation: np-swipe-r 520ms cubic-bezier(0.22, 1, 0.36, 1) 90ms both; }
+.np--from-left .np__text { animation: np-swipe-l 520ms cubic-bezier(0.22, 1, 0.36, 1) 90ms both; }
+.np--from-right .np__art { animation: np-deal 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.np--from-left .np__art { animation: np-deal-l 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .np__text, .np__art { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+}
+
+.np__eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 9px; }
+.np__eq i {
+  width: 2px;
+  height: 100%;
+  background: var(--np-accent);
+  transform-origin: bottom;
+  animation: np-eq 900ms ease-in-out infinite alternate;
+}
+/* Lean idle (lib/lively.ts): a few seconds after a change the loops hold
+   where they are. An endless animation keeps the window repainting at the
+   monitor's refresh rate (Bug Log #62); a paused one costs nothing. */
+.hud--still .np__eq i { animation-play-state: paused; }
+.np__eq i:nth-child(2) { animation-duration: 700ms; animation-delay: -300ms; }
+.np__eq i:nth-child(3) { animation-duration: 1100ms; animation-delay: -600ms; }
+.np__eq i:nth-child(4) { animation-duration: 800ms; animation-delay: -150ms; }
+@keyframes np-eq { from { transform: scaleY(0.25); } to { transform: scaleY(1); } }
+
+/* Along the plate's bottom edge; the trailing cut clips its end. Eases
+   linearly to where the song will be at the next poll (lib/widgets.ts). */
+.np__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--steel-a10);
+}
+.np__bar b {
+  display: block;
+  height: 100%;
+  background: var(--np-accent);
+  box-shadow: 0 0 6px var(--np-accent);
+  transform-origin: left center;
+  /* No slide: the bar jumps to where the song is at each poll (every 4 s).
+     A sliding bar was an animation that never ended (Bug Log #62). */
+}
+.hud.bub--nowplaying .np { position: static; }
+@media (prefers-reduced-motion: reduce) {
+  .np__eq i { animation: none; transform: scaleY(0.6); }
+  .np__bar b { transition: none; }
+}
+
+/* Paused: the same card, stepped back — cover desaturated, text and glow
+   dimmed, a pause mark where the equaliser was, the bar frozen where you
+   stopped. It keeps dimming over the linger (PAUSE_LINGER_MS), then the
+   bubble hides; resuming snaps straight back to full. */
+.np--paused .np__art { filter: grayscale(0.7) brightness(0.8); transition: filter 400ms ease; }
+.np--paused .np__title,
+.np--paused .np__artist { color: var(--slate); transition: color 400ms ease; }
+/* Starts when the class lands (the pause), so a fixed length is right —
+   keep it equal to PAUSE_LINGER_MS in lib/widgets.ts. */
+.np--paused { animation: np-linger 120s linear both; }
+@keyframes np-linger { from { opacity: 0.85; } to { opacity: 0.4; } }
+.np__pause { display: inline-flex; gap: 2px; height: 9px; }
+.np__pause i { width: 2px; height: 100%; background: var(--slate); }
+/* bubbleDataStyle leaves the cover colour off a paused card, so this wins. */
+.hud.bub--nowplaying:has(.np--paused) { --np-accent: var(--slate); }
+@media (prefers-reduced-motion: reduce) {
+  .np--paused { animation: none; opacity: 0.6; }
+}
+
+/* =============================================================================
+   Extras — optional flourishes, each behind its own switch (Display & HUD →
+   Screens → Extras), all off by default. With every one off, nothing below
+   matches anything the HUD draws.
+   ============================================================================= */
+
+/* ---- Today radar: today as one thin strip ---- */
+.radar {
+  position: relative;
+  padding: 3px 0 12px;
+}
+.radar__track {
+  position: relative;
+  display: block;
+  height: 8px;
+  /* A hairline through the middle, and a tick every three hours. */
+  background:
+    linear-gradient(var(--steel-a16), var(--steel-a16)) 0 50% / 100% 1px no-repeat,
+    repeating-linear-gradient(90deg, var(--steel-a28) 0 1px, transparent 1px 16.6667%),
+    linear-gradient(var(--steel-a28), var(--steel-a28)) 100% 0 / 1px 100% no-repeat;
+}
+.radar__seg {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  min-width: 2px;
+  background: var(--cobalt-a55);
+  box-shadow: 0 0 0 1px var(--ink-a55);
+}
+.radar__seg--event { background: var(--cobalt-soft); }
+.radar__seg.is-past { background: var(--steel-a28); }
+.radar__seg.is-now { background: var(--cobalt-bright); box-shadow: 0 0 0 1px var(--ink-a55), 0 0 8px var(--cobalt-a60); }
+.radar__now {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--silver);
+  box-shadow: 0 0 0 1px var(--ink-a70), 0 0 6px var(--cobalt-a60);
+  transition: left 1.2s var(--ease-soft);
+}
+.radar__scale {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 10px;
+  font-size: 9px;
+  line-height: 10px;
+  color: var(--muted-2);
+}
+.radar__scale span { position: absolute; transform: translateX(-50%); }
+.radar__scale span:first-child { transform: none; }
+.radar__scale span:last-child { transform: translateX(-100%); }
+.radar__next {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+.radar__cap { font-size: 10px; letter-spacing: 0.14em; color: var(--muted-2); }
+.radar__next .u__time { font-size: 12.5px; color: var(--cobalt-soft); min-width: 0; }
+.radar__label { color: var(--silver); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) {
+  .radar__now { transition: none; }
+}
+
+/* ---- The Extras card: across both columns, its switches in two ---- */
+.pres__body .card--wide { grid-column: 1 / -1; }
+.xgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 32px;
+}
+
+/* ---- Week boss bar: the meter drains; gold once cleared ---- */
+.boss {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.boss__cap {
+  flex: none;
+  min-width: 6.6em;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--cobalt-soft);
+}
+.hud .boss__bar { flex: 1; }
+.hud .boss__bar b { transition: width 700ms var(--ease-blade); }
+.boss.is-cleared .boss__cap {
+  color: var(--gold);
+  text-shadow: var(--halo), 0 0 10px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+.hud .boss.is-cleared .boss__bar b { background: var(--gold); }
+
+/* ---- Streak levels ---- */
+.streak__lv {
+  min-width: 34px;
+  text-align: right;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--cobalt-soft);
+}
+.streak__lv.is-zero { color: var(--slate); }
+.streak.is-hit .streak__lv { color: var(--gold); }
+/* The moment a target is hit: one gold wipe across the bubble, on the
+   brand wipe (q-wipe-in, blade ease), then it fades. 1.4s in all, as
+   Streaks.tsx WIPE_MS expects. */
+.streaks__wipe {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--gold) 6%, transparent),
+    color-mix(in srgb, var(--gold) 22%, transparent) 88%,
+    color-mix(in srgb, var(--gold) 40%, transparent)
+  );
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--gold) 70%, transparent);
+  animation:
+    q-wipe-in 420ms var(--ease-blade) both,
+    streak-wipe-out 900ms ease 500ms forwards;
+}
+@keyframes streak-wipe-out {
+  to { opacity: 0; }
+}
+
+/* ---- Objective complete: a gold-edged plate over the bubble, about 5s ---- */
+.objective {
+  --cut: 10px;
+  --edge-lead: var(--gold);
+  --edge: color-mix(in srgb, var(--gold) 45%, transparent);
+  --edge-trail: color-mix(in srgb, var(--gold) 75%, transparent);
+  --tick-c: var(--gold);
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 18px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--gold) 16%, transparent), transparent 75%),
+    color-mix(in srgb, var(--bg-0) 93%, transparent);
+  animation:
+    plate-in 460ms var(--ease-blade) backwards,
+    objective-out 700ms ease 4.3s forwards;
+}
+.hudstack--top-right .objective,
+.hudstack--bottom-right .objective {
+  animation-name: plate-in-r, objective-out;
+}
+@keyframes objective-out {
+  to { opacity: 0; }
+}
+.objective__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  text-shadow: var(--halo), 0 0 12px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+.objective__head::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 2px;
+  background: var(--gold);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent);
+}
+.objective__detail {
+  padding-left: 24px;
+  font-size: 12.5px;
+  color: var(--silver);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Up next: the next two songs, as the Now playing card's footer ----
+   Inside the same plate, so the cover glow and the accent keyline wrap it
+   too. A hairline with an accent tick, a Rajdhani caption, then two compact
+   rows: cover, title, artist in muted-2, the length as a readout. */
+.npq {
+  /* Takes the card's width without widening a Fit bubble: it adds nothing
+     to the card's own intrinsic width, then fills whatever that is. */
+  width: 0;
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: -1px;
+}
+.npq__cap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--muted-2);
+}
+/* The hairline, with a short tick in the cover's accent at its lead. */
+.npq__cap::before {
+  content: '';
+  flex: none;
+  width: 10px;
+  height: 2px;
+  background: var(--np-accent);
+  box-shadow: 0 0 0 1px var(--ink-a55);
+}
+.npq__cap::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--steel-a20), var(--steel-a06));
+  box-shadow: 0 1px 0 var(--ink-a50);
+}
+.npq__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.npq__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+.npq__art {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
+  clip-path: polygon(var(--cut-xs) 0, 100% 0, 100% calc(100% - var(--cut-xs)), calc(100% - var(--cut-xs)) 100%, 0 100%, 0 var(--cut-xs));
+}
+/* No cover: its place in the queue, as a readout. */
+.npq__art--n {
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  color: var(--muted-2);
+  background: var(--steel-a10);
+}
+.npq__text {
+  /* From its content, not from zero: a zero basis let the request tag take its
+     full width first and left the title a few letters. Now the tag (shrink 10)
+     gives way before the title (shrink 1). */
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.npq__title,
+.npq__artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.npq__title { flex: 0 1 auto; min-width: 3.5em; color: var(--steel); }
+/* The title barely yields: the artist (or, on a requested song, the req tag
+   that stands in for it) is what gets cut. Found live: "Hello Operat…" was
+   cut while "The White Stri…" still showed. */
+.npq__title { flex-shrink: 0.05; }
+/* The artist gives way first when the row is tight. */
+.npq__artist { flex: 0 100 auto; min-width: 0; font-size: 11px; color: var(--muted-2); }
+.npq__req {
+  flex: 0 10 auto;
+  min-width: 4em;
+  max-width: 7.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: none;
+  color: var(--cobalt-soft);
+}
+.npq__len {
+  flex: none;
+  min-width: 2.4em;
+  text-align: right;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted-2);
+}
+.hud--large .npq__row { font-size: 12.5px; }
+.hud--large .npq__art { width: 24px; height: 24px; }
+
+/* A song change deals the rows in from the corner's side, one after the
+   other, on the same curve as the card's swipe. */
+.npq.np--from-right .npq__row { animation: np-swipe-r 480ms cubic-bezier(0.22, 1, 0.36, 1) calc(160ms + var(--i, 0) * 70ms) both; }
+.npq.np--from-left .npq__row { animation: np-swipe-l 480ms cubic-bezier(0.22, 1, 0.36, 1) calc(160ms + var(--i, 0) * 70ms) both; }
+/* Paused: the footer steps back with the card. */
+.npq--paused { animation: np-linger 120s linear both; }
+.npq--paused .npq__art { filter: grayscale(0.7) brightness(0.8); }
+.npq--paused .npq__title,
+.npq--paused .npq__artist,
+.npq--paused .npq__req { color: var(--slate); }
+@media (prefers-reduced-motion: reduce) {
+  .npq .npq__row { animation: none; }
+  .npq--paused { animation: none; opacity: 0.6; }
+}
+
+/* ---- Mission debrief: the Sunday evening results sheet ----
+   Out of the flow, bottom-left where the one-line prompt was, so Next up
+   keeps its place (the margin stands in for the line it replaced). */
+.ambient.has-debrief .ambient__nextup { margin-bottom: 78px; }
+.debrief {
+  position: absolute;
+  left: 72px;
+  bottom: 100px;
+  min-width: 380px;
+  padding: 18px 26px 16px;
+  --bk-c: color-mix(in srgb, var(--steel) 34%, transparent);
+  --bk-l: 18px;
+  --bk-w: 2px;
+  box-shadow: 0 0 46px 18px color-mix(in srgb, var(--bg-0) 16%, transparent);
+  animation: q-wipe-in var(--dur-med) var(--ease-blade) 500ms both;
+}
+.debrief.is-complete { --bk-c: color-mix(in srgb, var(--gold) 55%, transparent); }
+.debrief__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: var(--silver);
+}
+.debrief__head::before {
+  content: '';
+  width: 14px;
+  height: 2px;
+  background: var(--cobalt-bright);
+  box-shadow: 0 0 8px var(--cobalt-a60);
+}
+.debrief__week { color: var(--slate); letter-spacing: 0.1em; }
+.debrief__all { margin-left: auto; color: var(--gold); }
+.debrief__rows > div {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  padding: 7px 0;
+  border-top: 1px solid var(--steel-a10);
+}
+.debrief__rows dt {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--slate);
+}
+/* The checklist markers: hollow while short, gold when complete. */
+.debrief__rows dt::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  box-shadow: inset 0 0 0 1.5px var(--steel-a40);
+}
+.debrief__rows .is-done dt::before { background: var(--gold); box-shadow: none; }
+.debrief__rows dd {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--silver);
+}
+.debrief__rows .is-done dd {
+  color: var(--gold);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--gold) 35%, transparent), 0 1px 12px var(--ink-a70);
+}
+.debrief__foot {
+  margin-top: 12px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: var(--cobalt-bright);
+  text-shadow: 0 0 22px var(--cobalt-a45), 0 1px 12px color-mix(in srgb, var(--ink) 75%, transparent);
+}
+
+
+/* ---- Day/night shift: tokens.css recolours; here the fills deepen ---- */
+:root[data-phase='dusk'] .hud {
+  --bub-fill: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-1) calc(min(1, var(--hud-alpha, 0.65) + 0.08) * 100%), transparent),
+    color-mix(in srgb, var(--bg-0) calc(min(1, var(--hud-alpha, 0.65) + 0.02) * 100%), transparent)
+  );
+}
+:root[data-phase='night'] .hud {
+  --bub-fill: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-0) calc(min(1, var(--hud-alpha, 0.65) + 0.14) * 100%), transparent),
+    color-mix(in srgb, var(--bg-0) calc(min(1, var(--hud-alpha, 0.65) + 0.08) * 100%), transparent)
+  );
+}
+/* Late at night the idle screen scrim is a touch deeper. */
+:root[data-phase='night'] .ambient {
+  --scrim-inner: color-mix(in srgb, var(--bg-1) 22%, transparent);
+  --scrim-outer: color-mix(in srgb, var(--ink) 44%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud .boss__bar b { transition: none; }
+  .streaks__wipe { display: none; }
+  .objective,
+  .hudstack--top-right .objective,
+  .hudstack--bottom-right .objective,
+  .debrief { animation: none; }
+}

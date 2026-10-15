@@ -1,0 +1,22 @@
+node_modules/
+dist/
+release/
+build/icon.png
+.env
+public/data/calendar.ics
+*.local
+.DS_Store
+Thumbs.db
+
+design-shots/
+
+# built by npm run smtc (scripts/build-smtc.mjs)
+electron/bin/
+
+# Personal strings for scripts/release-check.mjs (never commit)
+release-check.local.txt
+icon-source.local.txt
+
+# Private add-ons (Phase 9.3): links to thequetx/desktop-hud-addons, never committed
+electron/addons-private
+src/addons-private

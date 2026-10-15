@@ -1,0 +1,100 @@
+{
+  "name": "desktop-hud",
+  "productName": "Desktop HUD",
+  "private": true,
+  "version": "0.9.0",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "description": "A desktop HUD for the week: your calendar, tasks and now playing in the corners of the screen, over any wallpaper.",
+  "author": "thequetx",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke": "electron scripts/smoke.mjs",
+    "release:check": "node scripts/release-check.mjs",
+    "start": "electron .",
+    "app": "concurrently -k -n vite,electron -c blue,magenta \"vite --host 127.0.0.1 --strictPort\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
+    "icons": "node scripts/make-icons.mjs",
+    "pack": "node scripts/prep-wincodesign.mjs && node scripts/make-icons.mjs && node scripts/build-smtc.mjs && vite build && electron-builder --dir -c.extraMetadata.desktopHud.allowDebugPort=true && node scripts/release-check.mjs --warn",
+    "dist": "node scripts/prep-wincodesign.mjs && node scripts/make-icons.mjs && node scripts/build-smtc.mjs && vite build && electron-builder -c.extraMetadata.desktopHud.allowDebugPort=true && npm run smoke && node scripts/release-check.mjs --warn",
+    "smtc": "node scripts/build-smtc.mjs",
+    "dist:public": "node scripts/assert-public.mjs && node scripts/prep-wincodesign.mjs && node scripts/build-smtc.mjs && vite build && electron-builder && npm run smoke && node scripts/release-check.mjs",
+    "matrix": "node scripts/matrix.mjs",
+    "notices": "node scripts/notices.mjs"
+  },
+  "dependencies": {
+    "ical.js": "^2.1.0"
+  },
+  "devDependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/rajdhani": "^5.3.0",
+    "@types/node": "^20.14.15",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^9.0.1",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.3",
+    "vitest": "^4.1.11",
+    "wait-on": "^8.0.1",
+    "yaml": "^2.5.1"
+  },
+  "build": {
+    "appId": "io.github.thequetx.desktophud",
+    "productName": "Desktop HUD",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "include": "build/uninstaller.nsh"
+    },
+    "asarUnpack": [
+      "electron/bin/**"
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": false
+    },
+    "extraFiles": [
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      }
+    ]
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thequetx/desktop-hud"
+  },
+  "homepage": "https://github.com/thequetx/desktop-hud"
+}

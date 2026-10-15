@@ -1,0 +1,56 @@
+name: Bug report
+description: Something doesn't work as the manual says it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Issues are looked at about once a month; this is a spare-time project.
+        **Security problems:** please don't post them here, see SECURITY.md.
+        **Please don't paste calendar links:** they are secrets that give anyone your whole calendar.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Display & HUD → Integrations
+        2. …
+  - type: input
+    id: version
+    attributes:
+      label: Desktop HUD version
+      description: Tray icon → right-click; or the diagnostics file's first lines.
+    validations:
+      required: true
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows
+      options:
+        - Windows 11
+        - Windows 10 (22H2)
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: >-
+        Display & HUD → Integrations → Your data → Save diagnostics…, then drag the file here.
+        It has links, file paths and email addresses removed, and no notes or calendar links.
+        Have a look before you attach it.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and the Troubleshooting page.
+          required: true
