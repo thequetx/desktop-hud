@@ -24,7 +24,17 @@ if (existsSync(path.join(outDir, 'windows-10'))) {
   process.exit(0);
 }
 
-const sevenZip = require('7zip-bin').path7za;
+// 7zip-bin came with older electron-builder releases and is no longer in the
+// lockfile. Without it (a clean CI install), leave winCodeSign to
+// electron-builder: CI runners can create symlinks, so the workaround above is
+// only needed on a non-admin desktop that already has the package.
+let sevenZip;
+try {
+  sevenZip = require('7zip-bin').path7za;
+} catch {
+  console.log('7zip-bin not installed; electron-builder will fetch winCodeSign itself');
+  process.exit(0);
+}
 const url =
   'https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z';
 const archive = path.join(cache, 'winCodeSign-2.6.0.7z');
