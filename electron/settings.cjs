@@ -28,7 +28,7 @@ const SECTION_VERSION = 1;
  */
 const FIELDS = [
   { key: 'vault.path', env: ['VAULT_PATH', 'VITE_VAULT_PATH'] },
-  { key: 'vault.weeklyDir', env: ['WEEKLY_DIR'] },
+  { key: 'vault.weeklyDir', env: ['WEEKLY_DIR'], default: 'Weekly' },
   { key: 'vault.taskFolders', env: ['TASK_FOLDERS'] },
   { key: 'vault.backlogPath', env: ['BACKLOG_PATH'] },
   { key: 'vault.dailyDir', env: ['DAILY_DIR'] },
@@ -72,6 +72,16 @@ function setPath(obj, key, value) {
     o = o[k];
   }
   o[parts.at(-1)] = value;
+}
+
+/** Persist a new wizard's unfinished state before any other startup save.
+ * Only established legacy settings imply setup was already completed. */
+function initialiseOnboarding(state) {
+  if (state.readOnly || state.config.onboarding !== undefined) return false;
+  const c = state.config;
+  const legacy = state.existed && !state.error && Boolean(c.imported || c.vault?.path || Object.keys(c.hotkeys || {}).length);
+  c.onboarding = { v: 1, done: legacy };
+  return true;
 }
 
 function emptyConfig() {
@@ -188,7 +198,7 @@ function resolveSettings({ config, secrets = null, env = {}, packaged, fields = 
         }
       }
     }
-    out[f.key] = value == null ? '' : String(value);
+    out[f.key] = value == null ? (f.default ?? '') : String(value);
   }
   const hk = (config && config.hotkeys) || {};
   out.hotkeys = Object.fromEntries(Object.keys(HOTKEYS).map((k) => [k, typeof hk[k] === 'string' ? hk[k] : '']));
@@ -312,7 +322,21 @@ function addonFields(addons) {
   return out;
 }
 
+// Preserve the scope that older versions actually used, then let Settings own it.
+function migrateTaskScope(config, skeletonFolders, resolvedFolders) {
+  const v = config.vault || {};
+  const next = v.scopeVersion === 1
+    ? String(v.taskFolders ?? resolvedFolders ?? '').split(',')
+    : (skeletonFolders ?? String(resolvedFolders ?? '').split(','));
+  const folders = next.map(f => String(f).trim()).filter(Boolean);
+  const changed = v.scopeVersion !== 1;
+  if (changed) config.vault = { ...v, v: 1, scopeVersion: 1, taskFolders: folders.join(',') };
+  return { folders, changed };
+}
+
 module.exports = {
+  migrateTaskScope,
+  initialiseOnboarding,
   addonFields,
   finishLegacySecrets,
   SCHEMA_VERSION,

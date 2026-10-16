@@ -22,6 +22,7 @@ const {
 } = require('electron');
 const appProtocol = require('./appprotocol.cjs');
 const diagnostics = require('./diagnostics.cjs');
+const dataCleanup = require('./datacleanup.cjs');
 // Recent log lines, in memory, for "Save diagnostics…" (Phase 9.6).
 diagnostics.captureConsole();
 
@@ -83,6 +84,12 @@ if (PROFILE_DIR) {
   console.log(`[wd] profile: ${PROFILE_DIR}`);
 }
 
+// Establish ownership before any migration, cleanup or settings write.
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0);
+  return;
+}
+
 // ---- config -----------------------------------------------------------------
 //
 // Phase 9.2: config.json and an encrypted secrets file in userData
@@ -90,21 +97,21 @@ if (PROFILE_DIR) {
 // (unpacked) also reads the repo's .env and the environment (DHUD_<NAME>, then
 // the old WD_<NAME>) over config.json.
 
-// "Remove all my data" deletes Electron's own folders on the next start,
-// before anything opens them (Phase 9.6).
-{
-  const ud = app.getPath('userData');
-  if (fs.existsSync(path.join(ud, diagnostics.REMOVE_MARKER))) {
-    for (const n of diagnostics.CHROMIUM) {
-      try {
-        fs.rmSync(path.join(ud, n), { recursive: true, force: true });
-      } catch {
-        // still held; harmless
-      }
-    }
-    fs.rmSync(path.join(ud, diagnostics.REMOVE_MARKER), { force: true });
-    console.log('[wd] data: finished removing the previous data');
+// Finish removal before migration/providers can recreate data. A completed
+// reset must not import the old installation again.
+let cleanupWasRequested = false;
+try {
+  const cleanup = dataCleanup.retry(app.getPath('userData'));
+  cleanupWasRequested = cleanup.requested;
+  if (cleanup.pending.length) {
+    dialog.showErrorBox('Data removal is not finished', 'Some Desktop HUD files are still in use. Close other copies of the app and start it again to retry. Your notes folder has not been changed.');
+    app.exit(1);
+    return;
   }
+} catch (err) {
+  dialog.showErrorBox('Data removal needs attention', 'Desktop HUD could not finish its saved cleanup request. Its data has been kept. Check the data folder permissions before trying again.');
+  app.exit(1);
+  return;
 }
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 const SECRETS_FILE = path.join(app.getPath('userData'), 'secrets.bin');
@@ -123,7 +130,7 @@ let configState = settingsLib.readConfig(CONFIG_FILE);
 let pendingSecrets = null;
 // First run as Desktop HUD on a machine that had Week Dashboard: carry its
 // settings across. Never for a --profile run, which is a clean profile.
-if (!configState.existed && !PROFILE_DIR) {
+if (!configState.existed && !PROFILE_DIR && !cleanupWasRequested) {
   const imported = settingsLib.importLegacy({
     legacyDir: LEGACY_DIR,
     newDir: app.getPath('userData'),
@@ -136,6 +143,9 @@ if (!configState.existed && !PROFILE_DIR) {
     configState = settingsLib.readConfig(CONFIG_FILE);
     console.log(`[wd] settings: imported Week Dashboard's settings (${imported.copied.length} files copied)`);
   }
+}
+if (settingsLib.initialiseOnboarding(configState)) {
+  settingsLib.writeConfig(CONFIG_FILE, configState.config);
 }
 if (configState.error) console.warn(`[wd] settings: ${configState.error}`);
 if (configState.readOnly) console.warn('[wd] settings: config.json is from a newer version; it will not be changed');
@@ -202,17 +212,10 @@ if (!NOTES_BUILTIN && configState.config.nowplaying === undefined && !configStat
   settingsLib.writeConfig(CONFIG_FILE, configState.config);
   console.log('[wd] now playing: this install followed Spotify only; it still does (nowplaying.player)');
 }
-// First run (Phase 9.5): the wizard opens until it is finished or skipped.
-// Every install from before 9.5 had already been set up by hand.
-if (configState.config.onboarding === undefined && configState.existed && !configState.readOnly) {
-  configState.config.onboarding = { v: 1, done: true };
-  settingsLib.writeConfig(CONFIG_FILE, configState.config);
-}
 const NOTES_CAN_WRITE = NOTES_BUILTIN || Boolean(configState.config.vault && configState.config.vault.write === true);
-const WEEKLY_DIR = S['vault.weeklyDir'] || 'Weekly';
-// Phase 5 §3 — which folders the `#thisweek` sweep walks. Empty is the whole
-// vault (what it did before). This is the seed; `week-skeleton.yaml`'s
-// `task_folders:` owns it once the file has one, so the setting is editable.
+const WEEKLY_DIR = S['vault.weeklyDir']; // An explicit empty string means the notes root.
+// Empty scan scope means the whole vault. The legacy skeleton scope is
+// migrated once; subsequent changes belong to the Notes settings screen.
 const TASK_FOLDERS = S['vault.taskFolders'];
 // Phase 5 §6's holding pen. Configurable because it moves with the project
 // folder it sits in — the vault's numbered-folder reorg moved it once already.
@@ -358,12 +361,8 @@ let stopVaultWatch = null;
  *  change — it has already updated itself, so telling it again only costs a
  *  second render of identical content. */
 /**
- * Phase 5 §3 — point the `#thisweek` sweep at the skeleton's `task_folders:`.
- *
- * The file is authoritative once it has the key; `WD_TASK_FOLDERS` seeded it
- * (skeleton.cjs `init`) and is the fallback for a file that somehow hasn't got
- * one. A change forces the next pass rather than waiting out the rescan floor,
- * so widening the scope shows the newly-included tasks straight away.
+ * Import the effective legacy skeleton task scope once. Settings owns the
+ * scope after migration; a changed scope forces the next scan.
  */
 async function applyTaskFolders() {
   if (!vault || !vault.ready) return;
@@ -373,7 +372,11 @@ async function applyTaskFolders() {
   } catch (err) {
     console.error('[wd] skeleton: could not read task_folders', err);
   }
-  const next = list ?? TASK_FOLDERS.split(',');
+  const migration = settingsLib.migrateTaskScope(configState.config, list, TASK_FOLDERS);
+  const next = migration.folders;
+  if (migration.changed && !configState.readOnly) {
+    settingsLib.writeConfig(CONFIG_FILE, configState.config);
+  }
   if (!vault.setTaskFolders(next)) return;
   const scope = vault.taskFolders;
   console.log(
@@ -394,20 +397,28 @@ function broadcast(channel, payload, exceptSender) {
 // target): the media reader stops and the calendar and notes timers skip,
 // until unlock. On battery those timers run at a third of the rate.
 let screenLocked = false;
-let batteryTick = 0;
-/** False on the ticks a battery-powered PC skips (two in three). */
-function batteryAllows() {
-  try {
-    if (!powerMonitor.isOnBatteryPower()) return true;
-  } catch {
-    return true;
-  }
-  batteryTick = (batteryTick + 1) % 3;
-  return batteryTick === 0;
+let systemSuspended = false;
+let onBattery = false;
+const activityState = () => ({ paused: screenLocked || systemSuspended, battery: onBattery });
+function restartPolling() {
+  for (const timer of [idleTimer, trayTimer, calTimer, vaultTimer]) clearInterval(timer);
+  idleTimer = trayTimer = calTimer = vaultTimer = null;
+  const state = activityState();
+  Promise.resolve(calSources?.setPaused(state.paused)).catch(err => console.warn('[wd] calendar resume', err.message));
+  calSources?.setBatterySaver(state.battery);
+  hoverPoll.sync();
+  broadcast('power:changed', state);
+  if (state.paused) { nowPlayingFeed.stop(); return; }
+  nowPlayingFeed.start();
+  const factor = state.battery ? 3 : 1;
+  idleTimer = setInterval(pollIdle, 1000 * factor);
+  trayTimer = setInterval(refreshTray, 60_000 * factor);
+  calTimer = setInterval(() => { if (anyWindowVisible()) syncCalendar(); }, CAL_POLL_MS * factor);
+  if (vault?.ready) vaultTimer = setInterval(() => { if (anyWindowVisible()) rescanVault(); }, VAULT_POLL_MS * factor);
 }
 
 function anyWindowVisible() {
-  if (screenLocked) return false;
+  if (activityState().paused) return false;
   return [settingsWin, ambientWin, ...hudWins.values()].some(
     (w) => w && !w.isDestroyed() && w.isVisible(),
   );
@@ -417,6 +428,7 @@ function anyWindowVisible() {
 // concurrent callers and floors the gap between attempts), so every trigger —
 // the poll, window show/focus, wake-from-sleep — can just call this.
 function syncCalendar(force) {
+  if (activityState().paused) return;
   // The calendar links: refetch any older than their interval, re-parse when
   // the week has turned. Cheap when nothing is due.
   if (calSources) calSources.catchUp(force ? 0 : undefined).catch((err) => console.error('[wd] calendar sources', err));
@@ -435,6 +447,7 @@ function eventsInRange(minIso, maxIso) {
 // file actually moved. Self-throttling (vault.cjs floors the gap), so every
 // trigger — the slow timer, window show/focus, wake-from-sleep — just calls it.
 function rescanVault(force) {
+  if (activityState().paused) return;
   if (!vault || !vault.ready) return;
   vault
     .rescan({ force })
@@ -696,7 +709,7 @@ function syncHudWindows() {
 // polling and not forwarded mouse events: electron/hudhover.cjs.
 
 const hoverPoll = hudHover.makeHoverPoll({
-  wanted: () => hudVisible && !arranging && presentation.hud.hoverFade === true,
+  wanted: () => !activityState().paused && hudVisible && !arranging && presentation.hud.hoverFade === true,
   cursor: () => screen.getCursorScreenPoint(),
   windows: () => liveHudWins().map(([, w]) => w),
   onError: (err) => console.error('[wd] hud hover poll', err),
@@ -1180,6 +1193,9 @@ async function openThisWeek() {
     }
   } catch (err) {
     console.error('[wd] open this week', err);
+    void dialog.showMessageBox({ type: 'error', title: 'Could not open this week',
+      message: 'Desktop HUD could not create or open the weekly note.',
+      detail: 'Check the Notes folder and writing permission in Display & HUD → Integrations. The existing note and template have been kept.', buttons: ['OK'] });
   }
 }
 
@@ -1266,9 +1282,7 @@ function createTray() {
 
 // ---- lifecycle --------------------------------------------------------------
 
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
+{
   // 'second-instance' used to be registered here, before whenReady(). But
   // whenReady() below awaits pickMode() — a ~500ms dev-server probe — before
   // creating the windows, and a second launch landing in that gap created a
@@ -1403,9 +1417,7 @@ if (!app.requestSingleInstanceLock()) {
       }
     }
 
-    idleTimer = setInterval(pollIdle, 1000);
-    // The tray's "Focus on: …" names whatever is on the calendar now.
-    trayTimer = setInterval(refreshTray, 60_000);
+
     // The now-playing feed (HUD bubble + stream overlay).
     nowPlayingFeed.start();
     startup.migrateLegacy();
@@ -1426,24 +1438,21 @@ if (!app.requestSingleInstanceLock()) {
         rescanVault();
       });
     }
+    powerMonitor.on('suspend', () => { systemSuspended = true; restartPolling(); });
     powerMonitor.on('resume', () => {
-      syncCalendar(true);
-      rescanVault(true);
-      scheduleFocusEnd();
+      systemSuspended = false;
+      restartPolling(); syncCalendar(true); rescanVault(true); scheduleFocusEnd();
     });
-    calTimer = setInterval(() => {
-      if (anyWindowVisible() && batteryAllows()) syncCalendar();
-    }, CAL_POLL_MS);
-    powerMonitor.on('lock-screen', () => {
-      screenLocked = true;
-      nowPlayingFeed.stop();
-    });
+    powerMonitor.on('lock-screen', () => { screenLocked = true; restartPolling(); });
     powerMonitor.on('unlock-screen', () => {
       screenLocked = false;
-      nowPlayingFeed.start();
-      syncCalendar();
-      rescanVault();
+      restartPolling(); syncCalendar(); rescanVault();
     });
+    powerMonitor.on('on-battery', () => { onBattery = true; restartPolling(); });
+    powerMonitor.on('on-ac', () => { onBattery = false; restartPolling(); });
+    onBattery = powerMonitor.isOnBatteryPower();
+    screenLocked = powerMonitor.getSystemIdleState(1) === 'locked';
+    restartPolling();
 
     // Vault freshness, the same shape as the calendar above: one recursive
     // watcher in the main process pushes `vault:changed` to every window,
@@ -1457,12 +1466,11 @@ if (!app.requestSingleInstanceLock()) {
         // as the slow pass — `watchDegraded` rides the vault:read-week payload.
         onDegraded: () => broadcast('vault:changed'),
       });
-      vaultTimer = setInterval(() => {
-        if (anyWindowVisible() && batteryAllows()) rescanVault();
-      }, VAULT_POLL_MS);
+
     }
   });
 
+  ipcMain.handle('power:state', () => activityState());
   ipcMain.on('settings:hide', () => hideSettings());
   // Each anchor's window reports its own content height; find it by sender.
   ipcMain.on('hud:resize', (e, height) => {
@@ -1702,17 +1710,24 @@ if (!app.requestSingleInstanceLock()) {
     } catch (err) {
       console.warn('[wd] data: could not turn start on login off', err.message);
     }
-    if (calSources) calSources.stop();
-    const failed = [];
-    for (const n of diagnostics.removableNow(fs.readdirSync(ud), { notes: r.checkboxChecked })) {
-      try {
-        fs.rmSync(path.join(ud, n), { recursive: true, force: true });
-      } catch {
-        failed.push(n);
-      }
+    // Preserve a user-chosen notes folder even if it happens to be nested
+    // inside userData. The ordinary external-folder case has nothing here.
+    const noteRel = path.relative(ud, VAULT_PATH);
+    const protect = !NOTES_BUILTIN && noteRel && !noteRel.startsWith('..') && !path.isAbsolute(noteRel)
+      ? [noteRel.split(path.sep)[0]] : [];
+    if (!NOTES_BUILTIN && !noteRel) return { ok: false, error: 'Your notes folder is also the app data folder. Move or disconnect it before removing app data.' };
+    try {
+      dataCleanup.begin(ud, { notes: r.checkboxChecked, protect });
+      if (calSources) calSources.stop();
+      const result = dataCleanup.retry(ud, { deferChromium: true });
+      if (result.pending.length) await dialog.showMessageBox(parent, {
+        type: 'info', title: 'Removal will finish on next start', buttons: ['Quit'],
+        message: 'Some app files are still in use.',
+        detail: 'The remaining files are saved in a cleanup list and will be retried before Desktop HUD starts again. Your selected notes folder is preserved.',
+      });
+    } catch (err) {
+      return { ok: false, error: 'Could not save the cleanup request. Close the app and check its data folder permissions.' };
     }
-    fs.writeFileSync(path.join(ud, diagnostics.REMOVE_MARKER), '');
-    console.log(`[wd] data: removed${failed.length ? `; ${failed.length} item(s) were in use and go on the next start` : ''}`);
     // exit, not quit: the quit handlers would write settings straight back.
     setTimeout(() => app.exit(0), 100);
     return { ok: true };
@@ -1793,6 +1808,7 @@ if (!app.requestSingleInstanceLock()) {
       const list = String(a.taskFolders).split(',').map((f) => f.trim()).filter(Boolean);
       if (list.some((f) => cleanRel(f) == null)) return { ok: false, error: 'Scan folders must be inside your notes folder' };
       v.taskFolders = list.join(',');
+      v.scopeVersion = 1;
     }
     // Always explicit, so nothing later has to guess (S1): a newly picked
     // folder is read-only unless the user said otherwise.

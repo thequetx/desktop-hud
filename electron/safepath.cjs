@@ -26,6 +26,24 @@ const isInside = (root, abs) => abs === root || abs.startsWith(root.endsWith(pat
 function makeContainment(root) {
   const base = path.resolve(root);
   let realBase = null;
+  async function resolvedBase() {
+    if (realBase) return realBase;
+    let ancestor = base;
+    const suffix = [];
+    while (true) {
+      try {
+        const resolved = await fs.realpath(ancestor);
+        realBase = path.resolve(resolved, ...suffix.reverse());
+        return realBase;
+      } catch (err) {
+        if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
+        const parent = path.dirname(ancestor);
+        if (parent === ancestor) throw err;
+        suffix.push(path.basename(ancestor));
+        ancestor = parent;
+      }
+    }
+  }
   const lexical = (rel) => {
     const abs = path.resolve(base, String(rel ?? ''));
     return isInside(base, abs) ? abs : null;
@@ -34,14 +52,40 @@ function makeContainment(root) {
     const abs = lexical(rel);
     if (!abs) return null;
     try {
-      if (!realBase) realBase = await fs.realpath(base);
+      await resolvedBase();
       const r = await fs.realpath(abs);
       return isInside(realBase, r) ? r : null;
     } catch {
       return null;
     }
   }
-  return { root: base, lexical, real };
+  /** Resolve an existing or not-yet-created target without allowing an
+   * existing junction/symlink ancestor to escape the chosen root. */
+  async function realTarget(rel) {
+    const abs = lexical(rel);
+    if (!abs) return null;
+    try {
+      await resolvedBase();
+      let ancestor = abs;
+      const suffix = [];
+      while (true) {
+        try {
+          const resolved = await fs.realpath(ancestor);
+          const target = path.resolve(resolved, ...suffix.reverse());
+          return isInside(realBase, target) ? target : null;
+        } catch (err) {
+          if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') return null;
+          const parent = path.dirname(ancestor);
+          if (parent === ancestor) return null;
+          suffix.push(path.basename(ancestor));
+          ancestor = parent;
+        }
+      }
+    } catch {
+      return null;
+    }
+  }
+  return { root: base, lexical, real, realTarget };
 }
 
 /** Markdown files under `dir`, without following links, to MAX_DEPTH. */
@@ -63,12 +107,33 @@ async function* walkMd(dir, depth = 0) {
 
 /** A note's text, or null if it is missing, not a file, or over the cap. */
 async function readNote(abs) {
+  let handle;
   try {
-    const st = await fs.stat(abs);
+    handle = await fs.open(abs, 'r');
+    const st = await handle.stat();
     if (!st.isFile() || st.size > MAX_NOTE_BYTES) return null;
-    return await fs.readFile(abs, 'utf8');
+    // Filesystems may return short reads, and a file can grow after stat().
+    // Start near its observed size, then grow only as the handle needs space.
+    let buffer = Buffer.allocUnsafe(Math.min(Math.max(st.size, 4096), MAX_NOTE_BYTES + 1));
+    let total = 0;
+    for (;;) {
+      if (total === buffer.length) {
+        if (total > MAX_NOTE_BYTES) return null;
+        const capacity = Math.min(Math.max(buffer.length * 2, 4096), MAX_NOTE_BYTES + 1);
+        const larger = Buffer.allocUnsafe(capacity);
+        buffer.copy(larger, 0, 0, total);
+        buffer = larger;
+      }
+      const { bytesRead } = await handle.read(buffer, total, buffer.length - total, total);
+      if (bytesRead === 0) break;
+      total += bytesRead;
+      if (total > MAX_NOTE_BYTES) return null;
+    }
+    return buffer.subarray(0, total).toString('utf8');
   } catch {
     return null;
+  } finally {
+    await handle?.close().catch(() => {});
   }
 }
 

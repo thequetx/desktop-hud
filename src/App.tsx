@@ -1,3 +1,4 @@
+import { setPollingInterval, clearPollingInterval } from './lib/polling';
 import { useEffect, useMemo, useState } from 'react';
 import { Ambient } from './components/Ambient';
 import { Hud } from './components/Hud';
@@ -105,9 +106,9 @@ function Surfaces({ mode }: { mode: Exclude<Mode, 'capture'> }) {
       root.dataset.phase = dayPhase(new Date());
     };
     apply();
-    const id = window.setInterval(apply, 60_000);
+    const id = setPollingInterval(apply, 60_000);
     return () => {
-      window.clearInterval(id);
+      clearPollingInterval(id);
       delete root.dataset.phase;
     };
   }, [dayNight]);
@@ -116,11 +117,11 @@ function Surfaces({ mode }: { mode: Exclude<Mode, 'capture'> }) {
   // minute, because the HUD runs for days and must turn the page on Monday.
   const [weekStart, setWeekStart] = useState(() => startOfISOWeek(new Date()));
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const id = setPollingInterval(() => {
       const w = startOfISOWeek(new Date());
       setWeekStart((cur) => (cur.getTime() === w.getTime() ? cur : w));
     }, 60_000);
-    return () => window.clearInterval(id);
+    return () => clearPollingInterval(id);
   }, []);
   const weekId = isoWeekId(weekStart);
 
@@ -239,11 +240,11 @@ function Surfaces({ mode }: { mode: Exclude<Mode, 'capture'> }) {
     };
 
     pull();
-    const id = window.setInterval(pull, AMBIENT_REFRESH_MS);
+    const id = setPollingInterval(pull, AMBIENT_REFRESH_MS);
 
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      clearPollingInterval(id);
     };
   }, [refreshTick, skelTick]);
 

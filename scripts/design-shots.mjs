@@ -482,6 +482,7 @@ const STUBS = {
   'notes:apply': () => ({ ok: true, restart: true }),
   'nowplaying:settings': () => ({ player: '' }),
   'nowplaying:set-player': () => ({ ok: false }),
+  'power:state': () => ({ paused: false, battery: false }),
   'app:restart': () => ({ ok: true }),
   'events:add-link': () => ({ ok: false }),
   'events:add-file': () => ({ ok: false, canceled: true }),

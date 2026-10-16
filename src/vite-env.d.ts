@@ -2,6 +2,8 @@
 
 interface WdBridge {
   isElectron: boolean;
+  activityState?: () => Promise<import('./lib/polling').ActivityState>;
+  onActivity?: (cb: (state: import('./lib/polling').ActivityState) => void) => () => void;
   /** The Display & HUD window closes itself (main reverts any unsaved preview). */
   hideSettings: () => void;
   resizeHud: (height: number) => void;

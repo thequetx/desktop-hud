@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -10,6 +10,7 @@ import { createRequire } from 'node:module';
 // in-process fake that runs the real parser, or one that never answers.
 
 const require_ = createRequire(import.meta.url);
+const fsPromises = require_('node:fs/promises') as any;
 const { makeCalendarSources, normaliseSources, windowFor } = require_('../electron/calsources.cjs') as any;
 const { makeParserHost } = require_('../electron/icsparse-host.cjs') as any;
 const { parseIcs } = require_('../electron/icsparse.cjs') as any;
@@ -117,7 +118,7 @@ describe('makeCalendarSources', () => {
     return new Response(routes[url]);
   };
 
-  function make(fork = fakeFork({ value: 'ok' }).fork) {
+  function make(fork = fakeFork({ value: 'ok' }).fork, fetch: (...args: any[]) => Promise<Response> = fetchImpl, intervals = {}) {
     return makeCalendarSources({
       dir,
       getSources: () => stored,
@@ -138,8 +139,9 @@ describe('makeCalendarSources', () => {
       onChange: () => {
         changes++;
       },
-      fetchImpl,
+      fetchImpl: fetch,
       now: () => NOW,
+      ...intervals,
     });
   }
 
@@ -162,6 +164,16 @@ describe('makeCalendarSources', () => {
     expect(s.list()).toEqual([]);
     expect(s.eventsInRange(range[0], range[1])).toEqual([]);
     expect(fetched).toEqual([]);
+    s.stop();
+  });
+
+  it('starts only one refresh loop when start is called more than once', async () => {
+    stored = [{ id: 'cal1', kind: 'ics-url', name: 'Home' }];
+    secrets.cal1 = LINK_A;
+    const s = make();
+    await s.start();
+    await s.start();
+    expect(fetched.filter((x) => x === LINK_A)).toHaveLength(1);
     s.stop();
   });
 
@@ -240,6 +252,151 @@ describe('makeCalendarSources', () => {
     expect(s.eventsInRange(range[0], range[1])).toHaveLength(2);
     expect(s.list()[0].lastError).toMatch(/network/);
     routes[LINK_A] = A;
+    s.stop();
+  });
+
+  it('does not replace the last-good disk cache with malformed ICS, and reloads it offline', async () => {
+    const cache = path.join(dir, 'cal-cache', 'cal1.ics');
+    let body = A;
+    const fetch = async () => new Response(body);
+    const s = make(fakeFork({ value: 'ok' }).fork, fetch);
+    await s.start();
+    const added = await s.add({ kind: 'ics-url', name: 'Home', url: LINK_A });
+    expect(added.id).toBe('cal1');
+    expect(await import('node:fs/promises').then((m) => m.readFile(cache, 'utf8'))).toBe(A);
+
+    body = 'BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:not-a-date\r\nEND:VEVENT\r\nEND:VCALENDAR';
+    await s.refresh(added.id);
+    expect(s.list()[0].lastError).toMatch(/could not be read|invalid/);
+    expect(await import('node:fs/promises').then((m) => m.readFile(cache, 'utf8'))).toBe(A);
+    s.stop();
+
+    const offline = make(fakeFork({ value: 'ok' }).fork, async () => { throw new TypeError('offline'); });
+    await offline.start();
+    await offline.refresh('cal1');
+    expect(offline.eventsInRange(range[0], range[1]).map((e: any) => e.title)).toEqual(['Dentist', 'Team sync']);
+    expect(await import('node:fs/promises').then((m) => m.readFile(cache, 'utf8'))).toBe(A);
+    offline.stop();
+  });
+
+  it('prevents a removed source request from overwriting a reused source id cache', async () => {
+    let callsA = 0;
+    let abortOld: (() => void) | undefined;
+    const fetch = async (url: string, { signal }: { signal: AbortSignal }) => {
+      if (url === LINK_B) return new Response(B);
+      callsA++;
+      if (callsA === 1) return new Response(A);
+      return new Promise<Response>((_resolve, reject) => {
+        abortOld = () => reject(new DOMException('aborted', 'AbortError'));
+        signal.addEventListener('abort', abortOld, { once: true });
+      });
+    };
+    const s = make(fakeFork({ value: 'ok' }).fork, fetch);
+    await s.start();
+    const old = await s.add({ kind: 'ics-url', name: 'Old', url: LINK_A });
+    const pending = s.refresh(old.id);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(s.remove(old.id).ok).toBe(true);
+    expect(abortOld).toBeDefined();
+    const replacement = await s.add({ kind: 'ics-url', name: 'New', url: LINK_B });
+    expect(replacement.id).toBe(old.id);
+    await pending;
+    const cache = path.join(dir, 'cal-cache', `${old.id}.ics`);
+    expect(await import('node:fs/promises').then((m) => m.readFile(cache, 'utf8'))).toBe(B);
+    s.stop();
+  });
+
+  it('keeps a replacement cache write safe while the removed source is committing', async () => {
+    let oldWrittenResolve!: () => void;
+    let newWrittenResolve!: () => void;
+    let releaseOld!: () => void;
+    let releaseNew!: () => void;
+    const oldWritten = new Promise<void>((resolve) => { oldWrittenResolve = resolve; });
+    const newWritten = new Promise<void>((resolve) => { newWrittenResolve = resolve; });
+    const oldGate = new Promise<void>((resolve) => { releaseOld = resolve; });
+    const newGate = new Promise<void>((resolve) => { releaseNew = resolve; });
+    const originalWriteFile = fsPromises.writeFile.bind(fsPromises);
+    let holdOld = true;
+    let holdNew = true;
+    const fetch = async (url: string) => new Response(url === LINK_A ? A : B);
+    const s = make(fakeFork({ value: 'ok' }).fork, fetch);
+    await s.start();
+    const writeSpy = vi.spyOn(fsPromises, 'writeFile').mockImplementation(async (...args: any[]) => {
+      const [file, data, options] = args as [string, string, any];
+      await originalWriteFile(file, data, options);
+      if (!String(file).endsWith('.tmp')) return;
+      if (data === A && holdOld) {
+        holdOld = false;
+        oldWrittenResolve();
+        await oldGate;
+      } else if (data === B && holdNew) {
+        holdNew = false;
+        newWrittenResolve();
+        await newGate;
+      }
+    });
+
+    try {
+      const oldAdd = s.add({ kind: 'ics-url', name: 'Old', url: LINK_A });
+      await oldWritten;
+      expect(s.remove('cal1').ok).toBe(true);
+      const newAdd = s.add({ kind: 'ics-url', name: 'New', url: LINK_B });
+      await newWritten;
+      releaseOld();
+      await oldAdd;
+      releaseNew();
+      const replacement = await newAdd;
+      expect(replacement.id).toBe('cal1');
+      const cache = path.join(dir, 'cal-cache', 'cal1.ics');
+      expect(await import('node:fs/promises').then((m) => m.readFile(cache, 'utf8'))).toBe(B);
+      expect((await import('node:fs/promises').then((m) => m.readdir(path.join(dir, 'cal-cache')))).filter((f: string) => f.endsWith('.tmp'))).toEqual([]);
+    } finally {
+      releaseOld();
+      releaseNew();
+      writeSpy.mockRestore();
+      s.stop();
+    }
+  });
+
+  it('uses the slower battery freshness age by default while preserving an explicit zero', async () => {
+    let calls = 0;
+    let clock = Date.now() + 100;
+    const fetch = async () => { calls++; return new Response(A); };
+    const s = make(fakeFork({ value: 'ok' }).fork, fetch, {
+      now: () => clock,
+      refreshMs: 100,
+      batteryRefreshMs: 10_000,
+    });
+    await s.start();
+    await s.add({ kind: 'ics-url', name: 'Home', url: LINK_A });
+    expect(calls).toBe(1);
+    s.setBatterySaver(true);
+    clock = Date.now() + 5000;
+    await s.catchUp(undefined);
+    expect(calls).toBe(1);
+    await s.catchUp(0);
+    expect(calls).toBe(2);
+    s.stop();
+  });
+
+  it('pauses file polling and refreshes immediately after resume; battery mode slows polling', async () => {
+    const file = path.join(dir, 'term.ics');
+    await writeFile(file, A);
+    const s = make(fakeFork({ value: 'ok' }).fork, fetchImpl, { fileCheckMs: 15, batteryFileCheckMs: 100 });
+    await s.start();
+    const added = await s.add({ kind: 'ics-file', name: 'Term', file });
+    expect(added.ok).toBe(true);
+    s.setBatterySaver(true);
+    await writeFile(file, B);
+    await import('node:fs/promises').then((m) => m.utimes(file, new Date(Date.now() + 5000), new Date(Date.now() + 5000)));
+    await new Promise((r) => setTimeout(r, 35));
+    expect(s.eventsInRange(range[0], range[1]).map((e: any) => e.title)).toEqual(['Dentist', 'Team sync']);
+    s.setPaused(true);
+    await s.refresh(added.id);
+    expect(s.eventsInRange(range[0], range[1]).map((e: any) => e.title)).toEqual(['Dentist', 'Team sync']);
+    s.setBatterySaver(true);
+    await s.setPaused(false);
+    expect(s.eventsInRange(range[0], range[1]).map((e: any) => e.title)).toEqual(['Team sync', 'Gym']);
     s.stop();
   });
 

@@ -72,6 +72,41 @@ describe('makeSafeWriter', () => {
     expect(await readFile(note, 'utf8')).toBe('v2\n');
   });
 
+  it('rechecks the expected contents after a failed rename before retrying', async () => {
+    let calls = 0;
+    const rename = async (a: string, b: string) => {
+      calls++;
+      await writeFile(note, 'newer Obsidian edit\n');
+      throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+    };
+    const w = makeSafeWriter({ backupsDir: backups, root, rename });
+    await expect(w.write(note, 'ours\n', { expect: 'v1\n' })).rejects.toBeInstanceOf(WriteConflict);
+    expect(calls).toBe(1);
+    expect(await readFile(note, 'utf8')).toBe('newer Obsidian edit\n');
+  }, 10_000);
+
+  it('serializes writes to one path so a stale concurrent edit cannot win', async () => {
+    const w = makeSafeWriter({ backupsDir: backups, root });
+    const results = await Promise.allSettled([
+      w.write(note, 'first\n', { expect: 'v1\n' }),
+      w.write(note, 'second\n', { expect: 'v1\n' }),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'rejected' && r.reason instanceof WriteConflict)).toHaveLength(1);
+    expect(['first\n', 'second\n']).toContain(await readFile(note, 'utf8'));
+  });
+
+  it('refuses a destination reached through a junction outside the selected folder', async () => {
+    const outside = path.join(tmp, 'outside');
+    await mkdir(outside);
+    await writeFile(path.join(outside, 'note.md'), 'keep\n');
+    await fsp.symlink(outside, path.join(root, 'escape'), 'junction');
+    const w = makeSafeWriter({ backupsDir: backups, root });
+    await expect(w.write(path.join(root, 'escape', 'note.md'), 'overwrite\n', { expect: 'keep\n' }))
+      .rejects.toBeInstanceOf(WriteConflict);
+    expect(await readFile(path.join(outside, 'note.md'), 'utf8')).toBe('keep\n');
+  });
+
   it('gives up on a file held too long, keeps the original, and removes the temp file', async () => {
     const rename = async () => {
       throw Object.assign(new Error('held'), { code: 'EPERM' });

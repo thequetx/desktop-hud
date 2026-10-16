@@ -1,3 +1,4 @@
+import { setPollingInterval, clearPollingInterval } from '../lib/polling';
 import { useEffect, useState } from 'react';
 import { fmtClock, fmtLongDay, sameDate } from '../lib/week';
 import { fmt } from '../lib/fmt';
@@ -49,8 +50,8 @@ export function Ambient({
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 30_000);
-    return () => window.clearInterval(id);
+    const id = setPollingInterval(() => setNow(new Date()), 30_000);
+    return () => clearPollingInterval(id);
   }, []);
 
   const upcoming = buildUpcoming(events, skeleton, now, 6);

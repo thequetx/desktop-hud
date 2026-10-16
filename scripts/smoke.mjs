@@ -48,6 +48,7 @@ const pageName = (p) => (typeof p === 'string' ? p : `${p.page}?${new URLSearchP
 // registered" error on every run. This test exists precisely so its output can
 // be trusted over "the build was clean", so drift fails it.
 const IPC_STUBS = {
+  'power:state': { paused: false, battery: false },
   'vault:read-week': null,
   'vault:read-backlog': { ok: true, items: [] },
   'vault:append-backlog': { ok: false },

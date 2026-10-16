@@ -16,11 +16,15 @@ To switch back, choose **Disconnect: use built-in notes**. Your folder isn't tou
 
 | Setting | What it means | Example |
 |---|---|---|
-| Weekly notes folder | One note per week, named by ISO week | `Weekly/2026-W42.md` |
+| Weekly notes folder | One note per week, named by ISO week; empty means the notes root | `Weekly/2026-W42.md` |
 | Daily notes folder | One note per day, named by date. Leave empty if you don't keep them | `Daily/2026-10-15.md` |
 | Backlog note | Where quick capture adds a line | `Backlog.md` |
 | This-week tag | A task with this tag anywhere counts as this week's | `#thisweek` |
 | Folders to scan | Where to look for tagged tasks; empty means the whole folder | `Projects, Areas` |
+
+The scan-folder choice in Settings takes effect after restart. On the first upgrade, the previous skeleton scope is preserved; later edits belong in Settings.
+
+If the weekly folder has no `_Template.md`, Open this week creates a minimal note with Intentions, Tasks and Review headings. An unreadable or unsafe template is reported instead of silently replaced.
 
 Inside a weekly note, Desktop HUD reads tasks (`- [ ] …`) under two headings:
 
@@ -57,9 +61,11 @@ With writing off, quick capture tells you writing is off, and Open this week ope
 
 Before every write, Desktop HUD:
 
-- reads the file again and refuses to write if it changed since it was read, so it never overwrites an edit you just made in another app;
+- reads the file again before replacing it and before each retry, refusing a detected conflicting edit;
 - keeps a copy of the previous version: the last 20 versions of each file, in the `backups` folder of its data folder (see [Uninstalling and your data](uninstall.md));
-- writes to a temporary file first and swaps it in, so a crash or a full disk can't leave a half-written note.
+- writes ordinary files to a temporary file first and swaps it in. Hardlinked files are written in place to preserve their links; those writes are not atomic.
+
+Writes to the same path are queued within the app. These checks reduce conflicts but cannot lock out another editor between the final check and replacement. Backups remain important, especially for hardlinked notes.
 
 To get an old version back, open the `backups` folder, find the note's folder, and copy the version you want over the note.
 

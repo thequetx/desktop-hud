@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -357,6 +357,7 @@ describe('resolveWeeklyAbs — follow the notes, whichever way the move went', (
 describe('makeVault against a throwaway vault', () => {
   let root: string;
   let weeklyAbs: string;
+  let junctionTarget: string | null = null;
   let vault: any;
 
   const weekly = (id: string) => path.join(weeklyAbs, `${id}.md`);
@@ -365,6 +366,7 @@ describe('makeVault against a throwaway vault', () => {
   beforeEach(async () => {
     // A fresh directory per test under the OS temp dir — never the owner's notes.
     root = await mkdtemp(path.join(os.tmpdir(), 'wd-vault-test-'));
+    junctionTarget = null;
     weeklyAbs = path.join(root, 'Weekly');
     await mkdir(weeklyAbs, { recursive: true });
     await writeFile(path.join(weeklyAbs, '_Template.md'), TEMPLATE, 'utf8');
@@ -375,6 +377,7 @@ describe('makeVault against a throwaway vault', () => {
 
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
+    if (junctionTarget) await rm(junctionTarget, { recursive: true, force: true });
   });
 
   describe('week IDs never become arbitrary paths (Phase 9.0, S3)', () => {
@@ -423,6 +426,26 @@ describe('makeVault against a throwaway vault', () => {
       const w = await vault.readWeek('2026-W44');
       expect(w.notePath).toBeNull();
       expect(w.tasks).toEqual([]);
+    });
+
+    it('refuses a weekly note reached through a junction outside the vault', async () => {
+      const outside = (junctionTarget = path.join(path.dirname(root), `${path.basename(root)}-outside-read`));
+      await mkdir(outside);
+      await writeFile(path.join(outside, '2026-W36.md'), '## Tasks\n- [ ] private\n');
+      await rm(weeklyAbs, { recursive: true });
+      await symlink(outside, weeklyAbs, 'junction');
+      const w = await vault.readWeek('2026-W36');
+      expect(w.notePath).toBeNull();
+      expect(w.tasks).toEqual([]);
+    });
+
+    it('does not sweep a configured folder that is a junction outside the vault', async () => {
+      const outside = (junctionTarget = path.join(path.dirname(root), `${path.basename(root)}-outside-scan`));
+      await mkdir(outside);
+      await writeFile(path.join(outside, 'private.md'), '- [ ] private #thisweek\n');
+      await symlink(outside, path.join(root, 'escape'), 'junction');
+      const scoped = makeVault({ vaultPath: root, weeklyDir: 'Weekly', taskFolders: 'escape' });
+      expect((await scoped.readWeek('2026-W35')).thisweek).toEqual([]);
     });
 
     it('sweeps #thisweek across the vault, tag stripped', async () => {
@@ -504,6 +527,35 @@ describe('makeVault against a throwaway vault', () => {
         notePath: 'Weekly/2026-W35.md',
       });
       expect(await read(weekly('2026-W35'))).toBe(before);
+    });
+
+    it('creates a minimal ISO week note when the fresh folder has no template', async () => {
+      await rm(path.join(weeklyAbs, '_Template.md'));
+      const r = await vault.createWeek('2026-W40');
+      expect(r.created).toBe(true);
+      const text = await read(weekly('2026-W40'));
+      expect(text).toContain('week: 2026-W40');
+      expect(text).toContain('range: 2026-09-28 to 2026-10-04');
+      expect(text.match(/^## .*$/gm)).toEqual(['## Intentions', '## Tasks', '## Review']);
+      expect(text).not.toContain('YYYY');
+    });
+
+    it('refuses an existing template linked outside the vault instead of using the fallback', async () => {
+      const outside = (junctionTarget = path.join(path.dirname(root), `${path.basename(root)}-outside-template`));
+      await mkdir(outside);
+      await rm(path.join(weeklyAbs, '_Template.md'));
+      await symlink(outside, path.join(weeklyAbs, '_Template.md'), 'junction');
+      await expect(vault.createWeek('2026-W40')).rejects.toThrow(/template/);
+      expect(await readFile(weekly('2026-W40')).catch(() => null)).toBeNull();
+    });
+
+    it('refuses to create a week through a weekly-folder junction outside the vault', async () => {
+      const outside = (junctionTarget = path.join(path.dirname(root), `${path.basename(root)}-outside-write`));
+      await mkdir(outside);
+      await rm(weeklyAbs, { recursive: true });
+      await symlink(outside, weeklyAbs, 'junction');
+      await expect(vault.createWeek('2026-W40')).rejects.toThrow(/outside the vault/);
+      expect(await readFile(path.join(outside, '2026-W40.md')).catch(() => null)).toBeNull();
     });
   });
 

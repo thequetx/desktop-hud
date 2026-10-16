@@ -78,6 +78,7 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [restart, setRestart] = useState(false);
   const saved = useRef(false);
+  const appliedNotes = useRef(false);
 
   // Step 1 — notes. Nothing is applied until Finish.
   const [notesChoice, setNotesChoice] = useState<'builtin' | 'folder'>('builtin');
@@ -191,9 +192,8 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
     } else {
       await revertPresentation();
     }
-    saved.current = true;
-    let needsRestart = false;
-    if (!notesSkipped && notesChoice === 'folder' && pick && form) {
+    let needsRestart = appliedNotes.current;
+    if (!appliedNotes.current && !notesSkipped && notesChoice === 'folder' && pick && form) {
       const r = await applyNotes({
         use: 'picked',
         weeklyDir: form.weeklyDir.trim(),
@@ -207,18 +207,24 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
         setStep(0);
         return setError(r.error ?? 'Could not save the notes folder.');
       }
+      appliedNotes.current = true;
       needsRestart = true;
     }
-    await finishOnboarding();
+    const completed = await finishOnboarding();
     setBusy(false);
+    if (!completed.ok) return setError(completed.error ?? 'Could not finish set-up. Please try again.');
+    saved.current = true;
     if (needsRestart) setRestart(true);
     else onClose();
   };
 
   const skipAll = async () => {
-    saved.current = true;
+    setBusy(true);
     await revertPresentation();
-    await finishOnboarding();
+    const completed = await finishOnboarding();
+    setBusy(false);
+    if (!completed.ok) return setError(completed.error ?? 'Could not save set-up. Please try again.');
+    saved.current = true;
     onClose();
   };
 

@@ -8,18 +8,21 @@
 // - backs the current version up before replacing it, keeping the last
 //   MAX_VERSIONS per file (and at most MAX_FILE_BACKUP_BYTES of them) in
 //   userData, so a write can always be undone by hand;
-// - is atomic: a dot-named temp file in the same folder (sync tools and
+// - for ordinary files, replacement is atomic: a dot-named temp file in the same folder (sync tools and
 //   Obsidian ignore it), then a rename. While Obsidian, OneDrive or an
 //   antivirus holds the file, Windows fails the rename with EPERM or EBUSY:
 //   it is retried with backoff, then refused, and the temp file removed;
 // - writes a hardlinked file in place (after the backup), because a rename
 //   would split it from its other names.
 //
-// It never deletes or renames a user's file.
+// Conflicts are checked before each retry, but an external process can still
+// write between the final check and replacement. Hardlink writes preserve the
+// link relationship and are not atomic; backups are the recovery mechanism.
 
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { makeContainment } = require('./safepath.cjs');
 
 const MAX_VERSIONS = 20;
 const MAX_FILE_BACKUP_BYTES = 20 * 1024 * 1024;
@@ -52,6 +55,8 @@ async function readOrNull(abs) {
  *   injectable so tests can hold the file the way Obsidian does.
  */
 function makeSafeWriter({ backupsDir, root, rename = fs.rename, now = () => new Date() }) {
+  const containment = makeContainment(root);
+  const inFlight = new Map();
   const dirFor = (abs) => {
     const rel = path.relative(root, abs).split(path.sep).join('/');
     const id = crypto.createHash('sha1').update(rel.toLowerCase()).digest('hex').slice(0, 16);
@@ -62,7 +67,16 @@ function makeSafeWriter({ backupsDir, root, rename = fs.rename, now = () => new 
     const { dir, rel } = dirFor(abs);
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(path.join(dir, 'file.json'), JSON.stringify({ rel }), 'utf8');
-    await fs.writeFile(path.join(dir, `${stamp(now())}.md`), text, 'utf8');
+    let name = `${stamp(now())}.md`;
+    while (true) {
+      try {
+        await fs.writeFile(path.join(dir, name), text, { encoding: 'utf8', flag: 'wx' });
+        break;
+      } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
+        name = `${stamp(now())}-${crypto.randomBytes(4).toString('hex')}.md`;
+      }
+    }
     // Newest first; keep MAX_VERSIONS and the byte budget.
     const names = (await fs.readdir(dir)).filter((n) => n.endsWith('.md')).sort().reverse();
     let bytes = 0;
@@ -74,8 +88,9 @@ function makeSafeWriter({ backupsDir, root, rename = fs.rename, now = () => new 
     }
   }
 
-  async function renameWithRetry(from, to) {
+  async function renameWithRetry(from, to, verify) {
     for (let i = 0; ; i++) {
+      await verify();
       try {
         await rename(from, to);
         return;
@@ -93,30 +108,60 @@ function makeSafeWriter({ backupsDir, root, rename = fs.rename, now = () => new 
    * changed, or the last rename error once retries run out.
    */
   async function write(abs, body, { expect } = {}) {
-    const current = await readOrNull(abs);
-    if (expect !== undefined && current !== expect) {
-      throw new WriteConflict(current == null ? 'the note was removed since it was read' : 'the note changed since it was read; nothing was written');
-    }
-    let st = null;
-    if (current != null) {
-      st = await fs.stat(abs);
-      await backup(abs, current);
-    } else {
-      await fs.mkdir(path.dirname(abs), { recursive: true });
-    }
-    if (st && st.nlink > 1) {
-      await fs.writeFile(abs, body, 'utf8');
-      return { ok: true, inPlace: true };
-    }
-    const tmp = path.join(path.dirname(abs), `.${path.basename(abs)}.dhud-tmp`);
+    const target = path.resolve(abs);
+    const key = process.platform === 'win32' ? target.toLowerCase() : target;
+    const prior = inFlight.get(key) || Promise.resolve();
+    let release;
+    const turn = new Promise((resolve) => { release = resolve; });
+    const queued = prior.then(() => turn);
+    inFlight.set(key, queued);
+    await prior;
     try {
-      await fs.writeFile(tmp, body, 'utf8');
-      await renameWithRetry(tmp, abs);
-    } catch (err) {
-      await fs.rm(tmp, { force: true }).catch(() => {});
-      throw err;
+      const rel = path.relative(path.resolve(root), target);
+      if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel) || !(await containment.realTarget(rel))) {
+        throw new WriteConflict('the note path is outside the selected notes folder');
+      }
+      const verify = async () => {
+        if (!(await containment.realTarget(rel))) throw new WriteConflict('the note path moved outside the selected notes folder');
+        const current = await readOrNull(target);
+        if (expect !== undefined && current !== expect) {
+          throw new WriteConflict(current == null ? 'the note was removed since it was read' : 'the note changed since it was read; nothing was written');
+        }
+      };
+      const current = await readOrNull(target);
+      if (expect !== undefined && current !== expect) {
+        throw new WriteConflict(current == null ? 'the note was removed since it was read' : 'the note changed since it was read; nothing was written');
+      }
+      let st = null;
+      if (current != null) {
+        st = await fs.stat(target);
+        await backup(target, current);
+      } else {
+        await fs.mkdir(path.dirname(target), { recursive: true });
+      }
+      if (st && st.nlink > 1) {
+        await verify();
+        const fresh = await fs.stat(target);
+        if (fresh.nlink <= 1) throw new WriteConflict('the note link changed while it was being written');
+        await fs.writeFile(target, body, 'utf8');
+        return { ok: true, inPlace: true };
+      }
+      const tmp = path.join(path.dirname(target), `.${path.basename(target)}.dhud-tmp-${crypto.randomBytes(8).toString('hex')}`);
+      try {
+        // Remove the fixed-name scratch file used by earlier releases. The
+        // current write has a unique name and cannot collide with another run.
+        await fs.rm(path.join(path.dirname(target), `.${path.basename(target)}.dhud-tmp`), { force: true });
+        await fs.writeFile(tmp, body, { encoding: 'utf8', flag: 'wx' });
+        await renameWithRetry(tmp, target, verify);
+      } catch (err) {
+        await fs.rm(tmp, { force: true }).catch(() => {});
+        throw err;
+      }
+      return { ok: true };
+    } finally {
+      release();
+      if (inFlight.get(key) === queued) inFlight.delete(key);
     }
-    return { ok: true };
   }
 
   /** Backed-up versions of `abs`, newest first: `{ file, at, size }`. */

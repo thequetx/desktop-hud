@@ -2,9 +2,11 @@
 //
 //   node scripts/release-check.mjs [resourcesDir] [--warn]
 //   node scripts/release-check.mjs --source [--warn]
+//   node scripts/release-check.mjs --source --require-personal
 //
 // --source (Phase 9.7) scans every file git tracks instead: what a public
-// repository would publish. Same rules.
+// repository would publish. Same rules. Add --include-untracked to check new
+// non-ignored files before staging a local release candidate.
 //
 // Scans the packaged app (`app.asar` and `app.asar.unpacked`) under
 // resourcesDir, default release/win-unpacked/resources. The installer is built
@@ -37,6 +39,7 @@ const asar = require('@electron/asar');
 const args = process.argv.slice(2);
 const warnOnly = args.includes('--warn');
 const sourceMode = args.includes('--source');
+const requirePersonal = args.includes('--require-personal');
 const resourcesDir = path.resolve(args.find((a) => !a.startsWith('--')) || 'release/win-unpacked/resources');
 
 /** Files that must never be packaged, whatever they contain. */
@@ -117,7 +120,7 @@ function* packagedFiles() {
 /** Every file git tracks, for --source. */
 function* sourceFiles() {
   const { execFileSync } = require('node:child_process');
-  const list = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean);
+  const list = execFileSync('git', ['ls-files', '-z', '--cached', ...(args.includes('--include-untracked') ? ['--others', '--exclude-standard'] : [])], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean);
   for (const rel of list) {
     let buf;
     try {
@@ -136,6 +139,10 @@ function lineOf(text, index) {
 }
 
 const findings = [];
+if (requirePersonal && !String(process.env.RELEASE_CHECK_PERSONAL || '').trim()) {
+  console.error('[release-check] --require-personal needs a non-empty RELEASE_CHECK_PERSONAL environment value');
+  process.exit(2);
+}
 const personal = personalList();
 let files = 0;
 
@@ -180,7 +187,7 @@ for (const f of findings) {
 const source = personal.length
   ? `${personal.length} personal strings`
   : 'no personal list (release-check.local.txt / RELEASE_CHECK_PERSONAL); generic rules only';
-console.log(`[release-check] scanned ${files} ${sourceMode ? 'tracked source files' : `packaged files under ${resourcesDir}`} (${source})`);
+console.log(`[release-check] scanned ${files} ${sourceMode ? (args.includes('--include-untracked') ? 'tracked and new source files' : 'tracked source files') : `packaged files under ${resourcesDir}`} (${source})`);
 
 if (!grouped.size) {
   console.log('[release-check] clean');

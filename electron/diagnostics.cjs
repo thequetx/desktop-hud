@@ -42,7 +42,14 @@ function safeJson(v) {
 /** Text with links, paths and emails taken out. */
 function redact(text) {
   return String(text)
-    .replace(/\b(https?|webcal|wss?|ftp):\/\/([^\s/'"<>]+)[^\s'"<>]*/gi, (_m, scheme, host) => `${scheme}://${host.replace(/^[^@]*@/, '')}/…`)
+    .replace(/\b(?:https?|webcal|wss?|ftp):\/\/[^\s'"<>]+/gi, (candidate) => {
+      try {
+        const u = new URL(candidate);
+        return u.host ? `${u.protocol}//${u.host}/…` : '<link>';
+      } catch {
+        return '<link>'; // Malformed input must not survive as a potential secret.
+      }
+    })
     .replace(/\bfile:\/\/\/?[^\s'"<>]*/gi, 'file:<path>')
     // A path may hold spaces ("My Notes"), so it runs to a quote, bracket,
     // comma, semicolon or the end of the line. Over-redacting is the safe side.

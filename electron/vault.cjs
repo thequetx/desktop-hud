@@ -801,7 +801,7 @@ function currentWeekId() {
 }
 
 // The sweep's walker: never follows a link, bounded depth (Phase 9.4, S3).
-const { walkMd, MAX_NOTE_BYTES } = require('./safepath.cjs');
+const { walkMd, readNote, makeContainment, MAX_NOTE_BYTES } = require('./safepath.cjs');
 
 /** walkMd()'s skip rules, applied to the vault-relative path fs.watch hands
  *  back. Anything that wouldn't have been swept isn't worth waking three
@@ -879,6 +879,7 @@ function makeVault({
   writer = null,
 } = {}) {
   const root = path.resolve(vaultPath);
+  const containment = makeContainment(root);
   const weeklyAbs = resolveWeeklyAbs(root, weeklyDir);
 
   /** The note for `weekId`, refusing anything that isn't a week ID. */
@@ -1018,13 +1019,19 @@ function makeVault({
   async function runSweep() {
     let changed = false;
     const seen = new Set();
-    for (const base of sweepRoots()) {
+    for (const lexicalBase of sweepRoots()) {
+      const baseRel = path.relative(root, lexicalBase);
+      const base = await containment.realTarget(baseRel);
+      if (!base) continue;
       for await (const file of walkMd(base)) {
         // Excluded against the path *below* the swept folder, so pointing
         // WD_TASK_FOLDERS straight at an excluded folder opts back into it.
         if (isExcludedRel(path.relative(base, file))) continue;
         if (seen.has(file)) continue;
         seen.add(file);
+        const fileRel = path.relative(root, file);
+        const containedFile = await containment.real(fileRel);
+        if (!containedFile) continue;
         let st;
         try {
           st = await fs.stat(file);
@@ -1036,12 +1043,8 @@ function makeVault({
         // network shares) can round two quick edits onto the same millisecond.
         if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) continue;
         if (st.size > MAX_NOTE_BYTES) continue; // not a note anyone wrote by hand
-        let text;
-        try {
-          text = await fs.readFile(file, 'utf8');
-        } catch {
-          continue;
-        }
+        const text = await readNote(containedFile);
+        if (text == null) continue;
         const hasTag = text.split(/\r?\n/).some((l) => mentionsTag(l, tag));
         const rel = path.relative(root, file).replace(/\\/g, '/');
         sweepCache.set(file, {
@@ -1226,7 +1229,10 @@ function makeVault({
     let tasks = [];
     let noteExists = false;
     try {
-      const lines = (await fs.readFile(noteAbs, 'utf8')).split(/\r?\n/);
+      const safeAbs = await containment.real(notePath);
+      const text = safeAbs ? await readNote(safeAbs) : null;
+      if (text == null) throw new Error('weekly note unavailable');
+      const lines = text.split(/\r?\n/);
       noteExists = true;
       intentions = parseSection(lines, 'Intentions', notePath);
       tasks = parseSection(lines, 'Tasks', notePath);
@@ -1284,8 +1290,12 @@ function makeVault({
   /** The open items in `Backlog.md`'s holding-pen section. */
   async function readBacklog() {
     const abs = backlogAbs();
-    if (!fss.existsSync(abs)) return { ok: true, file: backlogPath, items: [] };
-    const lines = (await fs.readFile(abs, 'utf8')).split(/\r?\n/);
+    const rel = path.relative(root, abs);
+    const safeAbs = await containment.real(rel);
+    if (!safeAbs) return { ok: true, file: backlogPath, items: [] };
+    const text = await readNote(safeAbs);
+    if (text == null) return { ok: true, file: backlogPath, items: [] };
+    const lines = text.split(/\r?\n/);
     // `parseSection` already drops empty checkboxes, which is what the
     // section's lone placeholder is: the *absence* of a backlog, not an item.
     const items = parseSection(lines, BACKLOG_SECTION, backlogPath);
@@ -1300,8 +1310,12 @@ function makeVault({
     const body = String(text ?? '').trim();
     if (!body) return { ok: false, error: 'empty' };
     const abs = backlogAbs();
+    if (!(await containment.realTarget(path.relative(root, abs)))) {
+      return { ok: false, error: 'refused: path outside the vault' };
+    }
     const exists = fss.existsSync(abs);
-    const raw = exists ? await fs.readFile(abs, 'utf8') : '';
+    const raw = exists ? await readNote(await containment.real(path.relative(root, abs))) : '';
+    if (raw == null) return { ok: false, error: 'backlog is unavailable or too large to edit' };
     // What the edit is based on: the write refuses if the note moved since.
     const expect = exists ? raw : null;
     const eol = exists ? eolOf(raw) : '\n';
@@ -1334,7 +1348,52 @@ function makeVault({
   /** Returns `{ lines, eol }` — the template's own line ending travels with the
    *  note it seeds, so a generated note doesn't silently adopt someone else's. */
   async function noteLinesFromTemplate(weekId) {
-    const tpl = await fs.readFile(path.join(weeklyAbs, '_Template.md'), 'utf8');
+    const templatePath = path.join(weeklyAbs, '_Template.md');
+    const templateRel = path.relative(root, templatePath);
+    const safeTemplate = await containment.real(templateRel);
+    let tpl;
+    if (safeTemplate) {
+      tpl = await readNote(safeTemplate);
+      if (tpl == null) throw new Error('weekly template is too large or unavailable');
+    } else {
+      // A missing template is normal for a fresh folder. Use the built-in
+      // minimal weekly structure; an existing but unsafe/unreadable template
+      // remains an error rather than being silently replaced.
+      let templateStat;
+      try {
+        templateStat = await fs.lstat(templatePath);
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err;
+      }
+      if (templateStat) throw new Error('weekly template is outside the selected notes folder');
+      const safeParent = await containment.realTarget(path.relative(root, path.dirname(templatePath)));
+      if (!safeParent) throw new Error('weekly template folder is outside the selected notes folder');
+      tpl = [
+        '---',
+        'tags: [week-dashboard, weekly-note]',
+        'week: YYYY-WWW',
+        'range: YYYY-MM-DD to YYYY-MM-DD',
+        'last_updated: YYYY-MM-DD',
+        'status: planning',
+        'intentions_total: 0',
+        'intentions_done: 0',
+        'tasks_total: 0',
+        'tasks_done: 0',
+        'hours_planned: 0',
+        'hours_kept: 0',
+        'streaks: {}',
+        '---',
+        '',
+        '# Week YYYY-WWW',
+        '',
+        '## Intentions',
+        '',
+        '## Tasks',
+        '',
+        '## Review',
+        '',
+      ].join('\n');
+    }
     const { mon, sun } = weekRange(weekId);
     return {
       eol: eolOf(tpl),
@@ -1379,6 +1438,8 @@ function makeVault({
 
   async function createWeek(weekId) {
     const abs = weekNoteAbs(weekId);
+    const noteRel = path.relative(root, abs);
+    if (!(await containment.realTarget(noteRel))) throw new Error('refused: weekly folder is outside the vault');
     if (fss.existsSync(abs)) return { ok: true, created: false, notePath: relPath(abs) };
     if (!canWrite) return { ...READ_ONLY, notePath: relPath(abs) };
     const { lines, eol } = await noteLinesFromTemplate(weekId);

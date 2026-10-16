@@ -21,6 +21,7 @@
 
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
+const { randomUUID } = require('node:crypto');
 
 const TIMEOUT_MS = 20_000;
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -41,13 +42,28 @@ function normaliseUrl(raw) {
 }
 
 /** Read a response body, refusing it once it passes `max` bytes. */
-async function readCapped(res, max) {
+async function readCapped(res, max, signal) {
   if (!res.body) return '';
   const reader = res.body.getReader();
   const chunks = [];
   let total = 0;
   for (;;) {
-    const { done, value } = await reader.read();
+    let onAbort;
+    const aborted = new Promise((_, reject) => {
+      onAbort = () => {
+        try { reader.cancel(); } catch { /* the stream may already be closed */ }
+        reject(new Error('calendar body read aborted'));
+      };
+      if (signal?.aborted) onAbort();
+      else signal?.addEventListener('abort', onAbort, { once: true });
+    });
+    let result;
+    try {
+      result = await Promise.race([reader.read(), aborted]);
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+    }
+    const { done, value } = result;
     if (done) break;
     total += value.byteLength;
     if (total > max) {
@@ -60,34 +76,50 @@ async function readCapped(res, max) {
 }
 
 /** One fetch, following redirects by hand. Throws an error that never contains the URL. */
-async function fetchIcs(url, { fetchImpl = fetch, timeoutMs = TIMEOUT_MS, maxBytes = MAX_BYTES } = {}) {
+async function fetchIcs(url, { fetchImpl = fetch, timeoutMs = TIMEOUT_MS, maxBytes = MAX_BYTES, signal: outerSignal } = {}) {
   let current = url;
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    let res;
-    try {
-      res = await fetchImpl(current.href, { redirect: 'manual', signal: ctrl.signal });
-    } catch (err) {
-      throw new Error(err && err.name === 'AbortError' ? 'calendar fetch timed out' : 'calendar fetch failed (network)');
-    } finally {
-      clearTimeout(timer);
+  const ctrl = new AbortController();
+  const abortFromOuter = () => ctrl.abort();
+  if (outerSignal?.aborted) ctrl.abort();
+  else outerSignal?.addEventListener('abort', abortFromOuter, { once: true });
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      if (ctrl.signal.aborted) throw new Error(outerSignal?.aborted ? 'calendar fetch cancelled' : 'calendar fetch timed out');
+      let res;
+      try {
+        res = await fetchImpl(current.href, { redirect: 'manual', signal: ctrl.signal });
+      } catch (err) {
+        if (outerSignal?.aborted) throw new Error('calendar fetch cancelled');
+        throw new Error(ctrl.signal.aborted || (err && err.name === 'AbortError') ? 'calendar fetch timed out' : 'calendar fetch failed (network)');
+      }
+      if (res.status >= 300 && res.status < 400) {
+        const loc = res.headers.get('location');
+        if (!loc) throw new Error(`calendar redirect ${res.status} without a location`);
+        const next = new URL(loc, current);
+        if (current.protocol === 'https:' && next.protocol !== 'https:') throw new Error('calendar redirected away from https; refused');
+        if (next.protocol !== 'https:' && next.protocol !== 'http:') throw new Error('calendar redirected to an unsupported address; refused');
+        current = next;
+        continue;
+      }
+      if (!res.ok) throw new Error(`calendar fetch failed: HTTP ${res.status}`);
+      let text;
+      try {
+        text = await readCapped(res, maxBytes, ctrl.signal);
+      } catch (err) {
+        if (outerSignal?.aborted) throw new Error('calendar fetch cancelled');
+        if (ctrl.signal.aborted) throw new Error('calendar fetch timed out');
+        throw err;
+      }
+      if (ctrl.signal.aborted) throw new Error(outerSignal?.aborted ? 'calendar fetch cancelled' : 'calendar fetch timed out');
+      if (!/BEGIN:VCALENDAR/i.test(text.slice(0, 2048))) throw new Error('calendar link did not return an iCalendar file');
+      return text;
     }
-    if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get('location');
-      if (!loc) throw new Error(`calendar redirect ${res.status} without a location`);
-      const next = new URL(loc, current);
-      if (current.protocol === 'https:' && next.protocol !== 'https:') throw new Error('calendar redirected away from https; refused');
-      if (next.protocol !== 'https:' && next.protocol !== 'http:') throw new Error('calendar redirected to an unsupported address; refused');
-      current = next;
-      continue;
-    }
-    if (!res.ok) throw new Error(`calendar fetch failed: HTTP ${res.status}`);
-    const text = await readCapped(res, maxBytes);
-    if (!/BEGIN:VCALENDAR/i.test(text.slice(0, 2048))) throw new Error('calendar link did not return an iCalendar file');
-    return text;
+    throw new Error('calendar fetch: too many redirects');
+  } finally {
+    clearTimeout(timer);
+    outerSignal?.removeEventListener('abort', abortFromOuter);
   }
-  throw new Error('calendar fetch: too many redirects');
 }
 
 /**
@@ -95,7 +127,8 @@ async function fetchIcs(url, { fetchImpl = fetch, timeoutMs = TIMEOUT_MS, maxByt
  * the newest good copy (or null). Nothing runs until start(), and stop()
  * clears the timer.
  */
-function makeIcsFeed({ url, cacheFile, log = console.log, fetchImpl, refreshMs = REFRESH_MS, onChange = () => {} }) {
+const cacheOwners = new Map();
+function makeIcsFeed({ url, cacheFile, log = console.log, fetchImpl, validate = () => {}, refreshMs = REFRESH_MS, onChange = () => {} }) {
   const target = normaliseUrl(url);
   let text = null;
   let fetchedAt = null;
@@ -103,27 +136,59 @@ function makeIcsFeed({ url, cacheFile, log = console.log, fetchImpl, refreshMs =
   const warning = target && target.protocol === 'http:' ? 'This link is not encrypted (http). Use https if your calendar offers it.' : null;
   let timer = null;
   let inFlight = null;
+  let controller = null;
+  let generation = 0;
+  let running = false;
+  let paused = false;
+  let intervalMs = refreshMs;
+  const cacheToken = {};
+  if (cacheFile) cacheOwners.set(cacheFile, cacheToken);
+  let disposed = false;
+
+  function arm() {
+    if (timer) clearInterval(timer);
+    timer = running && !paused ? setInterval(refresh, intervalMs) : null;
+  }
 
   async function refresh() {
-    if (!target) return;
+    if (!target || paused || disposed) return;
     if (inFlight) return inFlight;
+    const op = ++generation;
+    const opController = new AbortController();
+    controller = opController;
     inFlight = (async () => {
       try {
-        const next = await fetchIcs(target, { fetchImpl });
+        const next = await fetchIcs(target, { fetchImpl, signal: opController.signal });
+        await validate(next);
+        if (op !== generation || disposed) return;
         const changed = next !== text;
         text = next;
         fetchedAt = Date.now();
+        const recovered = lastError != null;
         lastError = null;
-        if (cacheFile) {
-          await fsp.writeFile(`${cacheFile}.tmp`, next, 'utf8');
-          await fsp.rename(`${cacheFile}.tmp`, cacheFile);
+        if (cacheFile && cacheOwners.get(cacheFile) === cacheToken) {
+          const tmp = `${cacheFile}.${randomUUID()}.tmp`;
+          try {
+            await fsp.writeFile(tmp, next, { encoding: 'utf8', flag: 'wx' });
+            if (op === generation && !disposed && cacheOwners.get(cacheFile) === cacheToken) await fsp.rename(tmp, cacheFile);
+          } finally {
+            // Each feed owns a unique, exclusively-created temp file, so stale
+            // work can never remove a replacement feed's pending cache write.
+            await fsp.rm(tmp, { force: true }).catch(() => {});
+          }
         }
-        if (changed) onChange();
+        if ((changed || recovered) && op === generation && !disposed) onChange();
       } catch (err) {
+        if (op !== generation || disposed || (err.message === 'calendar fetch cancelled')) return;
+        const changed = lastError !== err.message;
         lastError = err.message;
         log(`[wd] ics: ${err.message} (keeping the last good copy)`);
+        if (changed) onChange();
       } finally {
-        inFlight = null;
+        if (op === generation) {
+          inFlight = null;
+          controller = null;
+        }
       }
     })();
     return inFlight;
@@ -132,7 +197,9 @@ function makeIcsFeed({ url, cacheFile, log = console.log, fetchImpl, refreshMs =
   return {
     configured: !!target,
     start() {
-      if (!target) return;
+      if (!target || disposed) return;
+      if (running) return;
+      running = true;
       if (cacheFile && text == null) {
         try {
           text = fs.readFileSync(cacheFile, 'utf8');
@@ -142,12 +209,22 @@ function makeIcsFeed({ url, cacheFile, log = console.log, fetchImpl, refreshMs =
         }
       }
       refresh();
-      timer = setInterval(refresh, refreshMs);
+      arm();
     },
     stop() {
       if (timer) clearInterval(timer);
       timer = null;
+      running = false;
+      generation++;
+      if (controller) controller.abort();
+      controller = null;
+      inFlight = null;
+      disposed = true;
+      if (cacheFile && cacheOwners.get(cacheFile) === cacheToken) cacheOwners.delete(cacheFile);
     },
+    pause() { if (paused) return; paused = true; arm(); generation++; if (controller) controller.abort(); controller = null; inFlight = null; },
+    resume() { if (!paused) return Promise.resolve(); paused = false; if (running) { const run = refresh(); arm(); return run; } },
+    setRefreshMs(ms) { intervalMs = ms; arm(); },
     refresh,
     text: () => text,
     status: () => ({ configured: !!target, fetchedAt, lastError, warning }),

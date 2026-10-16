@@ -1,3 +1,4 @@
+import { setPollingInterval, clearPollingInterval } from '../lib/polling';
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { buildUpcoming } from '../lib/upcoming';
@@ -134,8 +135,8 @@ export function Hud({
   // 30s is plenty for a list of rows; a countdown wants the minute it changes.
   useEffect(() => {
     const every = focus ? 5_000 : 30_000;
-    const id = window.setInterval(() => setNow(new Date()), every);
-    return () => window.clearInterval(id);
+    const id = setPollingInterval(() => setNow(new Date()), every);
+    return () => clearPollingInterval(id);
   }, [focus]);
 
   useEffect(() => {
@@ -192,12 +193,12 @@ export function Hud({
     const offGoogle = onGoogleChange(ask);
     // A failed fetch changes no events, so nothing is pushed: re-ask now and
     // then, for the offline line (Phase 9.6).
-    const id = window.setInterval(ask, 5 * 60 * 1000);
+    const id = setPollingInterval(ask, 5 * 60 * 1000);
     return () => {
       cancelled = true;
       off();
       offGoogle();
-      window.clearInterval(id);
+      clearPollingInterval(id);
     };
   }, [vaultTick]);
 
@@ -265,10 +266,10 @@ export function Hud({
         setNowPlaying(np ? { ...np, pausedAt: seen } : np);
       });
     void poll();
-    const id = window.setInterval(poll, NOW_PLAYING_POLL_MS);
+    const id = setPollingInterval(poll, NOW_PLAYING_POLL_MS);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      clearPollingInterval(id);
     };
   }, [wantsNowPlaying]);
 
@@ -293,11 +294,11 @@ export function Hud({
           if (!cancelled) setAddonData((cur) => (cur[id] === value ? cur : { ...cur, [id]: value }));
         });
       void poll();
-      return window.setInterval(poll, w.poll!.ms);
+      return setPollingInterval(poll, w.poll!.ms);
     });
     return () => {
       cancelled = true;
-      timers.forEach((t) => window.clearInterval(t));
+      timers.forEach((t) => clearPollingInterval(t));
     };
     // addonPollKey stands for addonPolls: re-run only when the set of bubbles changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps

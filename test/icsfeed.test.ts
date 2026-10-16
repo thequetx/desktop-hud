@@ -70,6 +70,12 @@ describe('fetchIcs — the safety rules (trust model S3)', () => {
     await expect(fetchIcs(new URL(SECRET), { fetchImpl: html.impl })).rejects.toThrow(/did not return an iCalendar/);
   });
 
+  it('keeps the timeout through a stalled response body', async () => {
+    const never = new ReadableStream<Uint8Array>({ start() {} });
+    const { impl } = fakeFetch({ [SECRET]: new Response(never) });
+    await expect(fetchIcs(new URL(SECRET), { fetchImpl: impl, timeoutMs: 25 })).rejects.toThrow(/timed out/);
+  });
+
   it('never puts the URL in an error', async () => {
     const cases = [
       fakeFetch({}), // network
@@ -134,6 +140,26 @@ describe('makeIcsFeed — cache and refresh', () => {
     feed.stop();
   });
 
+  it('notifies on error and recovery even when the successful text is unchanged', async () => {
+    let fail = false;
+    let changes = 0;
+    const { impl } = fakeFetch({ [SECRET]: () => fail ? new Response('down', { status: 503 }) : new Response(ICS) });
+    const feed = makeIcsFeed({ url: SECRET, fetchImpl: impl, log: () => {}, onChange: () => changes++ });
+    await feed.refresh();
+    expect(changes).toBe(1);
+    fail = true;
+    await feed.refresh();
+    expect(feed.status().lastError).toMatch(/HTTP 503/);
+    expect(changes).toBe(2);
+    await feed.refresh();
+    expect(changes).toBe(2);
+    fail = false;
+    await feed.refresh();
+    expect(feed.status().lastError).toBeNull();
+    expect(changes).toBe(3);
+    feed.stop();
+  });
+
   it('starts from the cache before the first fetch lands', async () => {
     const cacheFile = path.join(dir, 'c.ics');
     await writeFile(cacheFile, ICS, 'utf8');
@@ -144,5 +170,26 @@ describe('makeIcsFeed — cache and refresh', () => {
     await feed.refresh();
     expect(feed.text()).toBe(ICS);
     feed.stop();
+  });
+
+  it('is idempotent across repeated starts and cancels a request on stop', async () => {
+    let calls = 0;
+    const feed = makeIcsFeed({
+      url: SECRET,
+      fetchImpl: async (_url: string, { signal }: { signal: AbortSignal }) => {
+        calls++;
+        return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true }));
+      },
+      refreshMs: 10,
+      log: () => {},
+    });
+    feed.start();
+    feed.start();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(calls).toBe(1);
+    feed.stop();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toBe(1);
+    expect(feed.text()).toBeNull();
   });
 });

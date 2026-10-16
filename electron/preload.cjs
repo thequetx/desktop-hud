@@ -10,6 +10,12 @@ ipcRenderer.on('hud:shown', (_e, shown) => {
 
 contextBridge.exposeInMainWorld('wd', {
   isElectron: true,
+  activityState: () => ipcRenderer.invoke('power:state'),
+  onActivity: (cb) => {
+    const handler = (_e, state) => cb(state);
+    ipcRenderer.on('power:changed', handler);
+    return () => ipcRenderer.removeListener('power:changed', handler);
+  },
   // The Display & HUD window closes itself; main reverts any unsaved preview.
   hideSettings: () => ipcRenderer.send('settings:hide'),
   // HUD asks the shell to shrink its window to the rendered content height.

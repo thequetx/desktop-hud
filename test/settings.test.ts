@@ -188,3 +188,49 @@ describe('addonFields — an add-on declares its own settings (Phase 9.3)', () =
     expect(S.FIELDS.some((f: { key: string }) => /hollow/i.test(f.key))).toBe(false);
   });
 });
+
+
+describe('setup state survives interruption', () => {
+  it('persists unfinished setup before later startup saves and keeps it on restart', () => {
+    const file = path.join(dir, 'config.json');
+    const first = S.readConfig(file);
+    expect(S.initialiseOnboarding(first)).toBe(true);
+    first.config.calendar = { sources: [] };
+    S.writeConfig(file, first.config);
+    const second = S.readConfig(file);
+    expect(S.initialiseOnboarding(second)).toBe(false);
+    expect(second.config.onboarding.done).toBe(false);
+  });
+  it('keeps established legacy installations out of the wizard', () => {
+    const state = { config: { vault: { path: 'X' } }, existed: true };
+    S.initialiseOnboarding(state);
+    expect((state.config as any).onboarding.done).toBe(true);
+  });
+  it('does not treat an empty or damaged config as completed setup', () => {
+    const state = { config: {}, existed: true, error: 'bad config' };
+    S.initialiseOnboarding(state);
+    expect((state.config as any).onboarding.done).toBe(false);
+  });
+  it('does not modify a newer config', () => {
+    const state = { config: { schemaVersion: 99 }, existed: true, readOnly: true };
+    expect(S.initialiseOnboarding(state)).toBe(false);
+    expect(state.config).toEqual({ schemaVersion: 99 });
+  });
+  it('distinguishes an absent weekly setting from an explicitly chosen root', () => {
+    expect(S.resolveSettings({ config: {}, packaged: true })['vault.weeklyDir']).toBe('Weekly');
+    expect(S.resolveSettings({ config: { vault: { weeklyDir: '' } }, packaged: true })['vault.weeklyDir']).toBe('');
+  });
+});
+
+
+describe('task scope migration', () => {
+  it('preserves the effective legacy skeleton scope over an imported environment seed', () => {
+    const config = { vault: { taskFolders: 'Old' } };
+    expect(S.migrateTaskScope(config, ['Current'], 'Old').folders).toEqual(['Current']);
+    expect(S.migrateTaskScope(config, ['Later'], 'Old').folders).toEqual(['Current']);
+  });
+  it('keeps an explicit empty Settings scope and falls back when no skeleton exists', () => {
+    expect(S.migrateTaskScope({ vault: { scopeVersion: 1, taskFolders: '' } }, ['Ignored'], '').folders).toEqual([]);
+    expect(S.migrateTaskScope({}, null, 'One, Two').folders).toEqual(['One', 'Two']);
+  });
+});

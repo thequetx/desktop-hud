@@ -36,12 +36,12 @@ describe('buildReport', () => {
   it('includes recent log lines, redacted, and the facts it was given', () => {
     const fake: any = { log: (..._a: unknown[]) => {}, warn: (..._a: unknown[]) => {}, error: (..._a: unknown[]) => {} };
     captureConsole(fake);
-    fake.warn('[wd] ics: calendar fetch failed for https://cal.example.com/private/abc');
+    fake.warn('[wd] ics: calendar fetch failed for https://example.com/private/abc');
     fake.log('[wd] notes folder: C:\\Users\\you\\My Vault');
     const r = buildReport({ app: { version: '0.1.0' }, settings: { calendars: 2, notes: 'folder', write: false } });
     expect(r).toContain('version: 0.1.0');
     expect(r).toContain('calendars: 2');
-    expect(r).toContain('https://cal.example.com/…');
+    expect(r).toContain('https://example.com/…');
     expect(r).not.toContain('private/abc');
     expect(r).not.toContain('My Vault');
     expect(_lines.length).toBeGreaterThanOrEqual(2);
@@ -53,5 +53,17 @@ describe('removableNow — what Remove all my data deletes', () => {
   it('everything of the app’s, not Electron’s own files, and not the built-in notes unless asked', () => {
     expect(removableNow(entries)).toEqual(['config.json', 'secrets.bin', 'presentation.json', 'cal-cache', 'backups', 'google-calendar.json']);
     expect(removableNow(entries, { notes: true })).toContain('Notes');
+  });
+});
+
+
+describe('diagnostics URL edge cases', () => {
+  it.each(['https://example.com?token=SECRET', 'https://example.com#SECRET', 'webcal://user:SECRET@example.com?key=SECRET'])('removes root query, fragments and credentials from %s', url => {
+    const text = redact(url);
+    expect(text).not.toContain('SECRET');
+    expect(text).toContain('example.com');
+  });
+  it('redacts an invalid URL conservatively', () => {
+    expect(redact('https://[broken?token=SECRET')).toBe('<link>');
   });
 });

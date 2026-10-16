@@ -45,6 +45,8 @@ describe('makeContainment', () => {
     expect(c.lexical('link/secret.md')).toBeTruthy();
     expect(await c.real('link/secret.md')).toBeNull();
     expect(await c.real('Notes/missing.md')).toBeNull();
+    expect(await c.realTarget('Notes/new.md')).toBe(path.join(vault, 'Notes', 'new.md'));
+    expect(await c.realTarget('link/new.md')).toBeNull();
   });
 });
 
@@ -68,6 +70,13 @@ describe('readNote', () => {
     await writeFile(big, Buffer.alloc(MAX_NOTE_BYTES + 1, 'a'));
     expect(await readNote(big)).toBeNull();
     expect(await readNote(path.join(vault, 'Notes', 'Plan.md'))).toContain('Inside task');
+  });
+
+  it('returns the complete contents of a larger note', async () => {
+    const text = `# Large note\n${'0123456789abcdef'.repeat(12_000)}`;
+    const file = path.join(vault, 'Notes', 'large.md');
+    await writeFile(file, text);
+    expect(await readNote(file)).toBe(text);
   });
 });
 

@@ -25,6 +25,7 @@ const json = (maxBytes, optional = false) => ({ t: 'json', maxBytes, optional })
 
 /** channel -> argument specs (after the event). [] = takes nothing. */
 const SCHEMAS = {
+  'power:state': [],
   // add-ons (Phase 9.3)
   'addon:call': [str(64), str(64), json(64 * KB, true)],
   // your data (Phase 9.6)

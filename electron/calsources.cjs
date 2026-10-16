@@ -24,7 +24,9 @@ const path = require('node:path');
 const { makeIcsFeed } = require('./icsfeed.cjs');
 
 const REFRESH_MS = 15 * 60 * 1000;
+const BATTERY_REFRESH_MS = 60 * 60 * 1000;
 const FILE_CHECK_MS = 60 * 1000;
+const BATTERY_FILE_CHECK_MS = 5 * 60 * 1000;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_SOURCES = 20;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -70,34 +72,64 @@ function makeFileFeed({ file, onChange = () => {} }) {
   let lastError = null;
   let fetchedAt = null;
   let timer = null;
+  let running = false;
+  let paused = false;
+  let intervalMs = FILE_CHECK_MS;
+  let generation = 0;
+  let inFlight = null;
+  function arm() {
+    if (timer) clearInterval(timer);
+    timer = running && !paused ? setInterval(refresh, intervalMs) : null;
+  }
   async function refresh() {
-    try {
+    if (paused) return;
+    if (inFlight) return inFlight;
+    const op = ++generation;
+    inFlight = (async () => { try {
       const st = await fsp.stat(file);
+      if (op !== generation || paused) return;
       if (!st.isFile()) throw new Error('not a file');
       if (st.size > MAX_FILE_BYTES) throw new Error(`calendar file is larger than ${MAX_FILE_BYTES / 1024 / 1024} MB`);
-      if (st.mtimeMs === mtime && text != null) return;
+      if (st.mtimeMs === mtime && text != null) {
+        if (lastError) { lastError = null; onChange(); }
+        return;
+      }
       const next = await fsp.readFile(file, 'utf8');
+      if (op !== generation || paused) return;
       if (!/BEGIN:VCALENDAR/i.test(next.slice(0, 2048))) throw new Error('that file is not an iCalendar file');
       mtime = st.mtimeMs;
       fetchedAt = Date.now();
+      const recovered = lastError != null;
       lastError = null;
       const changed = next !== text;
       text = next;
-      if (changed) onChange();
+      if (changed || recovered) onChange();
     } catch (err) {
+      if (op !== generation || paused) return;
+      const changed = lastError !== (err.code === 'ENOENT' ? 'the calendar file is missing' : err.message);
       lastError = err.code === 'ENOENT' ? 'the calendar file is missing' : err.message;
-    }
+      if (changed) onChange();
+    } })().finally(() => { if (op === generation) inFlight = null; });
+    return inFlight;
   }
   return {
     configured: true,
     start() {
+      if (running) return;
+      running = true;
       refresh();
-      timer = setInterval(refresh, FILE_CHECK_MS);
+      arm();
     },
     stop() {
       if (timer) clearInterval(timer);
       timer = null;
+      running = false;
+      generation++;
+      inFlight = null;
     },
+    pause() { if (paused) return; paused = true; generation++; inFlight = null; arm(); },
+    resume() { if (!paused) return Promise.resolve(); paused = false; if (running) { const run = refresh(); arm(); return run; } },
+    setRefreshMs(ms) { intervalMs = ms; arm(); },
     refresh,
     text: () => text,
     status: () => ({ configured: true, fetchedAt, lastError }),
@@ -117,11 +149,17 @@ function makeCalendarSources({
   fetchImpl,
   now = () => Date.now(),
   refreshMs = REFRESH_MS,
+  fileCheckMs = FILE_CHECK_MS,
+  batteryRefreshMs = BATTERY_REFRESH_MS,
+  batteryFileCheckMs = BATTERY_FILE_CHECK_MS,
 }) {
   const cacheDir = path.join(dir, 'cal-cache');
   /** id -> { src, feed, parsed: { text, minMs, events, truncated, error } } */
   const live = new Map();
   let started = false;
+  let startPromise = null;
+  let paused = false;
+  let batterySaver = false;
 
   function feedFor(src) {
     const changed = () => reparse(src.id).then(() => onChange());
@@ -132,6 +170,10 @@ function makeCalendarSources({
       log,
       fetchImpl,
       refreshMs,
+      validate: async (text) => {
+        const result = await parser.parse(text, windowFor(now()).minMs, windowFor(now()).maxMs);
+        if (!result.ok) throw new Error(result.error || 'the calendar file could not be read');
+      },
       onChange: changed,
     });
   }
@@ -141,7 +183,9 @@ function makeCalendarSources({
     live.set(src.id, entry);
     if (started) {
       fs.mkdirSync(cacheDir, { recursive: true });
+      if (paused) entry.feed.pause();
       entry.feed.start();
+      entry.feed.setRefreshMs(src.kind === 'ics-file' ? (batterySaver ? batteryFileCheckMs : fileCheckMs) : (batterySaver ? batteryRefreshMs : refreshMs));
       reparse(src.id).then(() => onChange());
     }
     return entry;
@@ -212,16 +256,34 @@ function makeCalendarSources({
 
   return {
     start() {
+      if (started) return startPromise || Promise.resolve();
       started = true;
       fs.mkdirSync(cacheDir, { recursive: true });
       for (const src of normaliseSources(getSources())) open(src);
-      for (const e of live.values()) e.feed.start();
-      return Promise.all([...live.keys()].map(reparse)).then(() => onChange());
+      for (const e of live.values()) {
+        if (paused) e.feed.pause();
+        e.feed.start();
+        e.feed.setRefreshMs(e.src.kind === 'ics-file' ? (batterySaver ? batteryFileCheckMs : fileCheckMs) : (batterySaver ? batteryRefreshMs : refreshMs));
+      }
+      startPromise = Promise.all([...live.keys()].map(reparse)).then(() => onChange()).finally(() => { startPromise = null; });
+      return startPromise;
     },
     stop() {
+      if (!started && live.size === 0) return;
       started = false;
       for (const id of [...live.keys()]) close(id);
       parser.stop();
+    },
+    setPaused(value) {
+      const next = !!value;
+      if (paused === next) return;
+      paused = next;
+      const transitions = [...live.values()].map((e) => next ? e.feed.pause() : e.feed.resume());
+      if (!next && started) return Promise.all(transitions).then(() => Promise.all([...live.keys()].map(reparse))).then(() => onChange());
+    },
+    setBatterySaver(value) {
+      batterySaver = !!value;
+      for (const e of live.values()) e.feed.setRefreshMs(e.src.kind === 'ics-file' ? (batterySaver ? batteryFileCheckMs : fileCheckMs) : (batterySaver ? batteryRefreshMs : refreshMs));
     },
     list: () => [...live.values()].map(status),
     async add({ kind, name, url, file }) {
@@ -270,6 +332,7 @@ function makeCalendarSources({
     },
     /** Fetch or re-read one source, or all; then re-parse what changed. */
     async refresh(id) {
+      if (paused || !started) return;
       const ids = id ? [id] : [...live.keys()];
       await Promise.all(ids.map(async (k) => {
         const e = live.get(k);
@@ -282,7 +345,9 @@ function makeCalendarSources({
     /** After sleep or the week turning: refetch stale links, re-parse for the
      *  new window. Tells the windows only when something changed (a new text
      *  already does, through the feed). Cheap enough for every trigger. */
-    async catchUp(maxAgeMs = refreshMs) {
+    async catchUp(maxAgeMs) {
+      if (paused || !started) return;
+      if (maxAgeMs === undefined) maxAgeMs = batterySaver ? batteryRefreshMs : refreshMs;
       const t = now();
       const changed = await Promise.all([...live.entries()].map(async ([k, e]) => {
         const s = e.feed.status();
