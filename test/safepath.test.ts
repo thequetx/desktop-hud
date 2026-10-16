@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -45,7 +45,9 @@ describe('makeContainment', () => {
     expect(c.lexical('link/secret.md')).toBeTruthy();
     expect(await c.real('link/secret.md')).toBeNull();
     expect(await c.real('Notes/missing.md')).toBeNull();
-    expect(await c.realTarget('Notes/new.md')).toBe(path.join(vault, 'Notes', 'new.md'));
+    // realTarget answers with the real spelling, which differs from `vault`
+    // when the temp folder is an 8.3 short path (GitHub's Windows runner).
+    expect(await c.realTarget('Notes/new.md')).toBe(path.join(await realpath(vault), 'Notes', 'new.md'));
     expect(await c.realTarget('link/new.md')).toBeNull();
   });
 });

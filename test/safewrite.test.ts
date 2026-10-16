@@ -38,6 +38,18 @@ const allBackups = async () => {
 };
 
 describe('makeSafeWriter', () => {
+  it('writes through a root spelt another way, with one backup history for both spellings (Bug Log #94)', async () => {
+    // A junction stands in for an 8.3 short name or a redirected folder.
+    const alias = path.join(tmp, 'vault-alias');
+    await fsp.symlink(root, alias, 'junction');
+    const w = makeSafeWriter({ backupsDir: backups, root: alias });
+    await w.write(path.join(alias, 'Backlog.md'), 'v2\n', { expect: 'v1\n' });
+    await w.write(note, 'v3\n', { expect: 'v2\n' });
+    expect(await readFile(note, 'utf8')).toBe('v3\n');
+    expect((await readdir(backups)).length).toBe(1);
+    expect((await allBackups()).sort()).toEqual(['v1\n', 'v2\n']);
+  });
+
   it('replaces the file, backs up what was there, and leaves no temp file', async () => {
     const w = makeSafeWriter({ backupsDir: backups, root });
     await w.write(note, 'v2\n', { expect: 'v1\n' });

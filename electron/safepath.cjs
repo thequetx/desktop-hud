@@ -10,6 +10,7 @@
 //   and a planted multi-gigabyte ".md" would otherwise be read whole.
 
 const fs = require('node:fs/promises');
+const fss = require('node:fs');
 const path = require('node:path');
 
 const SKIP_DIRS = new Set(['.git', '.obsidian', '.trash', 'node_modules']);
@@ -17,6 +18,42 @@ const MAX_DEPTH = 16;
 const MAX_NOTE_BYTES = 2 * 1024 * 1024;
 
 const isInside = (root, abs) => abs === root || abs.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
+
+/**
+ * An absolute path in its real, canonical spelling when it exists (8.3 short
+ * names expanded, junctions followed), otherwise just resolved. Notes are
+ * read on real paths, so a root spelt any other way makes root-relative
+ * comparisons miss (Bug Log #94).
+ */
+function canonicalRoot(p) {
+  const abs = path.resolve(p);
+  try {
+    return fss.realpathSync.native(abs);
+  } catch {
+    return abs;
+  }
+}
+
+/**
+ * `p` with its folder in canonical spelling: the nearest existing ancestor is
+ * resolved and the rest kept. The last segment is left alone, so a link at the
+ * file itself is still the caller's to judge.
+ */
+function canonicalParent(p) {
+  const abs = path.resolve(p);
+  const tail = [path.basename(abs)];
+  let dir = path.dirname(abs);
+  while (true) {
+    try {
+      return path.join(fss.realpathSync.native(dir), ...tail.reverse());
+    } catch {
+      const up = path.dirname(dir);
+      if (up === dir) return abs;
+      tail.push(path.basename(dir));
+      dir = up;
+    }
+  }
+}
 
 /**
  * A containment checker for `root`. `lexical(rel)` is the absolute path, or
@@ -137,4 +174,4 @@ async function readNote(abs) {
   }
 }
 
-module.exports = { makeContainment, walkMd, readNote, isInside, SKIP_DIRS, MAX_DEPTH, MAX_NOTE_BYTES };
+module.exports = { canonicalRoot, canonicalParent, makeContainment, walkMd, readNote, isInside, SKIP_DIRS, MAX_DEPTH, MAX_NOTE_BYTES };

@@ -22,7 +22,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { makeContainment } = require('./safepath.cjs');
+const { canonicalParent, canonicalRoot, makeContainment } = require('./safepath.cjs');
 
 const MAX_VERSIONS = 20;
 const MAX_FILE_BACKUP_BYTES = 20 * 1024 * 1024;
@@ -54,7 +54,13 @@ async function readOrNull(abs) {
  *   `root` names the backup folders (by vault-relative path); `rename` is
  *   injectable so tests can hold the file the way Obsidian does.
  */
-function makeSafeWriter({ backupsDir, root, rename = fs.rename, now = () => new Date() }) {
+function makeSafeWriter({ backupsDir, root: rootIn, rename = fs.rename, now = () => new Date() }) {
+  // The same spelling the vault uses, or its paths look outside (Bug Log #94).
+  const root = canonicalRoot(rootIn);
+  /** Any spelling of a path (short name, junction, redirected folder) in the
+   * canonical form, so it gets one queue, one containment check and one
+   * backup folder. */
+  const spell = (abs) => canonicalParent(abs);
   const containment = makeContainment(root);
   const inFlight = new Map();
   const dirFor = (abs) => {
@@ -108,7 +114,7 @@ function makeSafeWriter({ backupsDir, root, rename = fs.rename, now = () => new 
    * changed, or the last rename error once retries run out.
    */
   async function write(abs, body, { expect } = {}) {
-    const target = path.resolve(abs);
+    const target = spell(abs);
     const key = process.platform === 'win32' ? target.toLowerCase() : target;
     const prior = inFlight.get(key) || Promise.resolve();
     let release;
@@ -166,7 +172,7 @@ function makeSafeWriter({ backupsDir, root, rename = fs.rename, now = () => new 
 
   /** Backed-up versions of `abs`, newest first: `{ file, at, size }`. */
   async function versions(abs) {
-    const { dir } = dirFor(abs);
+    const { dir } = dirFor(spell(abs));
     let names = [];
     try {
       names = (await fs.readdir(dir)).filter((n) => n.endsWith('.md')).sort().reverse();

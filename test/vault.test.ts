@@ -1110,6 +1110,22 @@ describe('Phase 5 §3 — scoping the #thisweek sweep', () => {
     await rm(root, { recursive: true, force: true });
   });
 
+  it('sweeps a vault opened through another name for the same folder (Bug Log #94)', async () => {
+    // A junction to the vault stands in for any non-canonical spelling of the
+    // root: an 8.3 short path (GitHub's runner temp is C:\Users\RUNNER~1\...),
+    // a redirected Documents folder, a subst drive. The sweep walks real paths,
+    // so it must not measure them against the unresolved root.
+    const alias = `${root}-alias`;
+    await symlink(root, alias, 'junction');
+    try {
+      vault = makeVault({ vaultPath: alias, weeklyDir: 'Weekly', taskFolders: 'Projects' });
+      const files = (await vault.readWeek('2026-W35')).thisweek.map((t: any) => t.file);
+      expect(files).toEqual(['Projects/Active.md']);
+    } finally {
+      await rm(alias, { recursive: true, force: true });
+    }
+  });
+
   it('walks the whole vault when nothing is configured — the old behaviour', async () => {
     expect(await build('')).toEqual([
       'Claude Conversations/Week Dashboard/Backlog.md',

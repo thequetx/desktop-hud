@@ -801,7 +801,7 @@ function currentWeekId() {
 }
 
 // The sweep's walker: never follows a link, bounded depth (Phase 9.4, S3).
-const { walkMd, readNote, makeContainment, MAX_NOTE_BYTES } = require('./safepath.cjs');
+const { walkMd, readNote, makeContainment, canonicalRoot, MAX_NOTE_BYTES } = require('./safepath.cjs');
 
 /** walkMd()'s skip rules, applied to the vault-relative path fs.watch hands
  *  back. Anything that wouldn't have been swept isn't worth waking three
@@ -878,7 +878,11 @@ function makeVault({
   canWrite = false,
   writer = null,
 } = {}) {
-  const root = path.resolve(vaultPath);
+  // The folder's real, canonical spelling (Bug Log #94). Notes are read on
+  // real paths, so a root spelt another way (an 8.3 short name, a junction, a
+  // redirected Documents folder) made every root-relative comparison miss, and
+  // fs.watch on a short name trips a libuv assertion that aborts the process.
+  const root = canonicalRoot(vaultPath);
   const containment = makeContainment(root);
   const weeklyAbs = resolveWeeklyAbs(root, weeklyDir);
 
@@ -1029,7 +1033,11 @@ function makeVault({
         if (isExcludedRel(path.relative(base, file))) continue;
         if (seen.has(file)) continue;
         seen.add(file);
-        const fileRel = path.relative(root, file);
+        // `file` is a real path under the resolved `base`; `root` may be spelt
+        // differently (8.3 short name, junction, redirected folder), so build
+        // the vault-relative path from the folder swept, not from `root`
+        // (Bug Log #94).
+        const fileRel = path.join(baseRel, path.relative(base, file));
         const containedFile = await containment.real(fileRel);
         if (!containedFile) continue;
         let st;
@@ -1046,7 +1054,7 @@ function makeVault({
         const text = await readNote(containedFile);
         if (text == null) continue;
         const hasTag = text.split(/\r?\n/).some((l) => mentionsTag(l, tag));
-        const rel = path.relative(root, file).replace(/\\/g, '/');
+        const rel = fileRel.replace(/\\/g, '/');
         sweepCache.set(file, {
           mtimeMs: st.mtimeMs,
           size: st.size,
