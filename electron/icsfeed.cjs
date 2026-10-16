@@ -21,6 +21,7 @@
 
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
+const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 
 const TIMEOUT_MS = 20_000;
@@ -128,6 +129,29 @@ async function fetchIcs(url, { fetchImpl = fetch, timeoutMs = TIMEOUT_MS, maxByt
  * clears the timer.
  */
 const cacheOwners = new Map();
+
+// Every change to one cache file (a feed's commit, a removal) runs in order on
+// one chain per path. The ownership check and the rename sit inside the same
+// step, so a rename already under way always lands before a later removal or a
+// replacement feed's commit, never after it (Bug Log #89).
+const cacheQueues = new Map();
+function cacheKey(file) {
+  const full = path.resolve(file);
+  return process.platform === 'win32' ? full.toLowerCase() : full;
+}
+function queueCacheOp(file, op) {
+  const key = cacheKey(file);
+  const run = (cacheQueues.get(key) || Promise.resolve()).then(op);
+  const tail = run.catch(() => {});
+  cacheQueues.set(key, tail);
+  tail.then(() => { if (cacheQueues.get(key) === tail) cacheQueues.delete(key); });
+  return run;
+}
+/** Remove a cache file now, and again after any write already queued for it. */
+function removeCache(file) {
+  try { fs.rmSync(file, { force: true }); } catch { /* nothing cached */ }
+  return queueCacheOp(file, () => fsp.rm(file, { force: true })).catch(() => {});
+}
 function makeIcsFeed({ url, cacheFile, log = console.log, fetchImpl, validate = () => {}, refreshMs = REFRESH_MS, onChange = () => {} }) {
   const target = normaliseUrl(url);
   let text = null;
@@ -170,7 +194,9 @@ function makeIcsFeed({ url, cacheFile, log = console.log, fetchImpl, validate = 
           const tmp = `${cacheFile}.${randomUUID()}.tmp`;
           try {
             await fsp.writeFile(tmp, next, { encoding: 'utf8', flag: 'wx' });
-            if (op === generation && !disposed && cacheOwners.get(cacheFile) === cacheToken) await fsp.rename(tmp, cacheFile);
+            await queueCacheOp(cacheFile, async () => {
+              if (op === generation && !disposed && cacheOwners.get(cacheFile) === cacheToken) await fsp.rename(tmp, cacheFile);
+            });
           } finally {
             // Each feed owns a unique, exclusively-created temp file, so stale
             // work can never remove a replacement feed's pending cache write.
@@ -231,4 +257,4 @@ function makeIcsFeed({ url, cacheFile, log = console.log, fetchImpl, validate = 
   };
 }
 
-module.exports = { makeIcsFeed, normaliseUrl, fetchIcs, MAX_BYTES };
+module.exports = { makeIcsFeed, normaliseUrl, fetchIcs, removeCache, MAX_BYTES };

@@ -358,6 +358,101 @@ describe('makeCalendarSources', () => {
     }
   });
 
+  /** Holds the first cache rename whose temp file holds `held`, after the ownership check (Bug Log #89). */
+  function holdRename(held: string) {
+    const originalRename = fsPromises.rename.bind(fsPromises);
+    const originalReadFile = fsPromises.readFile.bind(fsPromises);
+    let reachedResolve!: () => void;
+    let release!: () => void;
+    const reached = new Promise<void>((resolve) => { reachedResolve = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let holding = true;
+    const spy = vi.spyOn(fsPromises, 'rename').mockImplementation(async (...args: any[]) => {
+      const [from, to] = args as [string, string];
+      if (holding && String(from).endsWith('.tmp') && (await originalReadFile(from, 'utf8')) === held) {
+        holding = false;
+        reachedResolve();
+        await gate;
+      }
+      return originalRename(from, to);
+    });
+    return { reached, release: () => release(), restore: () => { release(); spy.mockRestore(); } };
+  }
+
+  it('a removed source rename already in flight cannot replace a reused id cache', async () => {
+    const fetch = async (url: string) => new Response(url === LINK_A ? A : B);
+    const s = make(fakeFork({ value: 'ok' }).fork, fetch);
+    await s.start();
+    const hold = holdRename(A);
+    try {
+      const oldAdd = s.add({ kind: 'ics-url', name: 'Old', url: LINK_A });
+      await hold.reached;
+      expect(s.remove('cal1').ok).toBe(true);
+      const newAdd = s.add({ kind: 'ics-url', name: 'New', url: LINK_B });
+      await new Promise((r) => setTimeout(r, 20));
+      hold.release();
+      await oldAdd;
+      expect((await newAdd).id).toBe('cal1');
+      const cache = path.join(dir, 'cal-cache', 'cal1.ics');
+      expect(await fsPromises.readFile(cache, 'utf8')).toBe(B);
+      s.stop();
+      // An offline restart loads the replacement, not the removed calendar.
+      const again = make(fakeFork({ value: 'ok' }).fork, async () => { throw new TypeError('fetch failed'); });
+      await again.start();
+      expect(await fsPromises.readFile(cache, 'utf8')).toBe(B);
+      again.stop();
+    } finally {
+      hold.restore();
+      s.stop();
+    }
+  });
+
+  it('removing a source while its cache rename is in flight leaves no cache behind', async () => {
+    const fetch = async (url: string) => new Response(url === LINK_A ? A : B);
+    const s = make(fakeFork({ value: 'ok' }).fork, fetch);
+    await s.start();
+    const hold = holdRename(A);
+    try {
+      const oldAdd = s.add({ kind: 'ics-url', name: 'Old', url: LINK_A });
+      await hold.reached;
+      expect(s.remove('cal1').ok).toBe(true);
+      hold.release();
+      await oldAdd;
+      await new Promise((r) => setTimeout(r, 20));
+      const files = await fsPromises.readdir(path.join(dir, 'cal-cache'));
+      expect(files).toEqual([]);
+    } finally {
+      hold.restore();
+      s.stop();
+    }
+  });
+
+  it('a rename in flight across pause and resume cannot overwrite the newer fetch', async () => {
+    const A2 = cal(ev('a2', 'Dentist moved', '20261016T220000Z', '20261016T230000Z'));
+    let text = A;
+    const fetch = async () => new Response(text);
+    const s = make(fakeFork({ value: 'ok' }).fork, fetch);
+    await s.start();
+    const first = await s.add({ kind: 'ics-url', name: 'Cal', url: LINK_A });
+    const hold = holdRename(B);
+    try {
+      text = B;
+      const pending = s.refresh(first.id);
+      await hold.reached;
+      s.setPaused(true);
+      text = A2;
+      const resumed = s.setPaused(false);
+      await new Promise((r) => setTimeout(r, 20));
+      hold.release();
+      await Promise.all([pending, resumed]);
+      const cache = path.join(dir, 'cal-cache', `${first.id}.ics`);
+      expect(await fsPromises.readFile(cache, 'utf8')).toBe(A2);
+    } finally {
+      hold.restore();
+      s.stop();
+    }
+  });
+
   it('uses the slower battery freshness age by default while preserving an explicit zero', async () => {
     let calls = 0;
     let clock = Date.now() + 100;

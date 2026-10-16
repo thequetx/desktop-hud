@@ -424,7 +424,7 @@ function anyWindowVisible() {
   );
 }
 
-// Ask the store for a delta pass. Cheap and self-throttling (calstore coalesces
+// Ask the provider for a delta pass. Cheap and self-throttling (the provider coalesces
 // concurrent callers and floors the gap between attempts), so every trigger —
 // the poll, window show/focus, wake-from-sleep — can just call this.
 function syncCalendar(force) {

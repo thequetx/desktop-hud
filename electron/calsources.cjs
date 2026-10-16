@@ -21,7 +21,7 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { makeIcsFeed } = require('./icsfeed.cjs');
+const { makeIcsFeed, removeCache } = require('./icsfeed.cjs');
 
 const REFRESH_MS = 15 * 60 * 1000;
 const BATTERY_REFRESH_MS = 60 * 60 * 1000;
@@ -313,11 +313,9 @@ function makeCalendarSources({
       close(id);
       saveSources(normaliseSources(getSources()).filter((s) => s.id !== id));
       if (kind === 'ics-url') deleteUrl(id);
-      try {
-        fs.rmSync(path.join(cacheDir, `${id}.ics`), { force: true });
-      } catch {
-        // nothing cached
-      }
+      // Also after any cache rename the removed feed already has under way, so
+      // it cannot land once the id is free again (Bug Log #89).
+      removeCache(path.join(cacheDir, `${id}.ics`));
       onChange();
       return { ok: true };
     },
