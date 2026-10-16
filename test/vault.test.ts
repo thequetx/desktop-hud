@@ -1112,7 +1112,7 @@ describe('Phase 5 §3 — scoping the #thisweek sweep', () => {
 
   it('sweeps a vault opened through another name for the same folder (Bug Log #94)', async () => {
     // A junction to the vault stands in for any non-canonical spelling of the
-    // root: an 8.3 short path (GitHub's runner temp is C:\Users\RUNNER~1\...),
+    // root: an 8.3 short path (the GitHub Actions runner's temp folder is one),
     // a redirected Documents folder, a subst drive. The sweep walks real paths,
     // so it must not measure them against the unresolved root.
     const alias = `${root}-alias`;
