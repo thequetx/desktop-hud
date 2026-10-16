@@ -232,6 +232,30 @@
   background: var(--cobalt);
   box-shadow: none;
 }
+/* Narrow windows (a small screen at 150–200%): keep the close button in view.
+   The step names give way to their numbers (screen readers still get the
+   names) and the padding tightens (Bug Log #92). */
+@media (max-width: 760px) {
+  .onb .pres__head {
+    gap: 12px;
+    padding: 10px 10px 10px 16px;
+  }
+  .onb .pres__head .q-title {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .onb__steps li {
+    gap: 0;
+    padding: 0 8px;
+    font-size: 0;
+  }
+  .onb__steps .onb__num {
+    font-size: 12px;
+  }
+  .onb__body {
+    padding: 20px 20px 16px;
+  }
+}
 .onb__body {
   flex: 1;
   min-height: 0;

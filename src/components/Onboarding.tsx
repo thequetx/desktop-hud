@@ -14,7 +14,7 @@
 // under five minutes. "Start fresh", paste, Minimal: three Nexts.
 
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import {
   addCalendarFile,
   addCalendarLink,
@@ -51,6 +51,27 @@ const PRESET_COPY: Record<Preset, { name: string; who: string }> = {
 /** The names of a preset's bubbles, as the HUD titles them. */
 function presetNames(preset: Preset): string[] {
   return presetLayout(preset).map(([id]) => (id === 'b-weeknote' ? 'This week’s tasks' : widgetMeta(id)?.label ?? id));
+}
+
+/**
+ * Arrow keys for a group of role="radio" buttons, as a native radio group
+ * behaves: the group is one Tab stop (the chosen button), and the arrows,
+ * Home and End move the choice with focus.
+ */
+export function radioKeys<T>(values: readonly T[], current: T, choose: (v: T) => void) {
+  return (e: KeyboardEvent<HTMLElement>) => {
+    const n = values.length;
+    const i = values.indexOf(current);
+    let to = -1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') to = (i + 1) % n;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') to = (i - 1 + n) % n;
+    else if (e.key === 'Home') to = 0;
+    else if (e.key === 'End') to = n - 1;
+    if (to < 0) return;
+    e.preventDefault();
+    choose(values[to]);
+    e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')[to]?.focus();
+  };
 }
 
 /** A tiny screen with a preset's bubbles stacked in their corners. */
@@ -267,7 +288,8 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
               calendar and corners are already saved.
             </p>
             <div className="onb__actions">
-              <button className="btn btn--primary" onClick={() => void restartApp()}>
+              {/* Focus the next step, so Enter restarts and a screen reader reads this screen. */}
+              <button className="btn btn--primary" autoFocus onClick={() => void restartApp()}>
                 Restart now
               </button>
               <button className="btn btn--quiet" onClick={onClose}>
@@ -291,10 +313,16 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
               Desktop HUD can show this week’s intentions and tasks from Markdown notes. Only want your calendar? Start
               fresh, or skip this step.
             </p>
-            <div className="onb-choice" role="radiogroup" aria-label="Notes">
+            <div
+              className="onb-choice"
+              role="radiogroup"
+              aria-label="Notes"
+              onKeyDown={radioKeys(['builtin', 'folder'] as const, notesChoice, setNotesChoice)}
+            >
               <button
                 role="radio"
                 aria-checked={notesChoice === 'builtin'}
+                tabIndex={notesChoice === 'builtin' ? 0 : -1}
                 className={notesChoice === 'builtin' ? 'onb-choice__card is-on' : 'onb-choice__card'}
                 onClick={() => setNotesChoice('builtin')}
               >
@@ -307,6 +335,7 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
               <button
                 role="radio"
                 aria-checked={notesChoice === 'folder'}
+                tabIndex={notesChoice === 'folder' ? 0 : -1}
                 className={notesChoice === 'folder' ? 'onb-choice__card is-on' : 'onb-choice__card'}
                 onClick={() => setNotesChoice('folder')}
               >
@@ -415,12 +444,21 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
             <p className="onb__lede">
               Look at the corners of your screen: the HUD is showing your choice now, over your own desktop.
             </p>
-            <div className="onb-presets" role="radiogroup" aria-label="Preset">
+            <div
+              className="onb-presets"
+              role="radiogroup"
+              aria-label="Preset"
+              onKeyDown={radioKeys(PRESETS, preset, (p) => {
+                setPreset(p);
+                setPresetTouched(true);
+              })}
+            >
               {PRESETS.map((p) => (
                 <button
                   key={p}
                   role="radio"
                   aria-checked={preset === p}
+                  tabIndex={preset === p ? 0 : -1}
                   className={preset === p ? 'onb-preset is-on' : 'onb-preset'}
                   onClick={() => {
                     setPreset(p);
