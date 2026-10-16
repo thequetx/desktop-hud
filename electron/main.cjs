@@ -23,6 +23,7 @@ const {
 const appProtocol = require('./appprotocol.cjs');
 const diagnostics = require('./diagnostics.cjs');
 const dataCleanup = require('./datacleanup.cjs');
+const { fitToWorkArea } = require('./windowfit.cjs');
 // Recent log lines, in memory, for "Save diagnostics…" (Phase 9.6).
 diagnostics.captureConsole();
 
@@ -488,12 +489,23 @@ function fadeTo(win, target, ms = 450) {
 // hidden (Phase 9.6). showSettings sends its target once the page has loaded,
 // so an arrange-mode ✎ still lands on the right bubble the first time.
 
+// The preferred size; fitToWorkArea shrinks it to the display it opens on.
+const SETTINGS_SIZE = { width: 1180, height: 840, minWidth: 960, minHeight: 620 };
+
+/** Where Display & HUD should open: the display the pointer is on. */
+function settingsWorkArea() {
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+}
+
 function createSettings() {
+  const fit = fitToWorkArea(SETTINGS_SIZE, settingsWorkArea());
   settingsWin = new BrowserWindow({
-    width: 1180,
-    height: 840,
-    minWidth: 960,
-    minHeight: 620,
+    x: fit.x,
+    y: fit.y,
+    width: fit.width,
+    height: fit.height,
+    minWidth: fit.minWidth,
+    minHeight: fit.minHeight,
     show: false,
     frame: false,
     resizable: true,
@@ -551,7 +563,13 @@ function showSettings(target) {
   const send = () => settingsWin.webContents.send('presentation:open', target || null);
   if (settingsWin.webContents.isLoading()) settingsWin.webContents.once('did-finish-load', send);
   else send();
-  if (!settingsWin.isVisible()) settingsWin.center();
+  if (!settingsWin.isVisible()) {
+    // Keep a size the user chose, but never more than the display can show.
+    const [width, height] = settingsWin.getSize();
+    const fit = fitToWorkArea({ ...SETTINGS_SIZE, width, height }, settingsWorkArea());
+    settingsWin.setMinimumSize(fit.minWidth, fit.minHeight);
+    settingsWin.setBounds({ x: fit.x, y: fit.y, width: fit.width, height: fit.height });
+  }
   settingsWin.show();
   settingsWin.focus();
 }

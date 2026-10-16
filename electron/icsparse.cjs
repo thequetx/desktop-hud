@@ -32,7 +32,9 @@ const LIMITS = {
  * `{ events, truncated }`; `truncated` names the cap that was hit, if any.
  */
 function parseIcs(text, minMs, maxMs, limits = LIMITS) {
-  const comp = new ICAL.Component(ICAL.parse(String(text)));
+  // Files saved by Windows tools often start with a UTF-8 byte-order mark,
+  // which ical.js cannot parse (Bug Log #90).
+  const comp = new ICAL.Component(ICAL.parse(String(text).replace(/^﻿/, '')));
   const vevents = comp.getAllSubcomponents('vevent');
   let truncated = null;
   if (vevents.length > limits.maxEvents) truncated = 'events';

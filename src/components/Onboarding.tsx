@@ -363,7 +363,7 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
                       {c.lastError
                         ? `Not updating — ${c.lastError}`
                         : c.fetchedAt
-                          ? `${c.count} events · read ${agoLabel(c.fetchedAt)}`
+                          ? `${c.count} event${c.count === 1 ? '' : 's'} · read ${agoLabel(c.fetchedAt)}`
                           : 'Reading…'}
                     </span>
                   </li>

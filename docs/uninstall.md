@@ -22,11 +22,13 @@ Your own notes folder, if you chose one, stays wherever it is. Desktop HUD doesn
 2. Right-click the tray icon and choose **Quit**.
 3. Open Windows **Settings → Apps → Installed apps**, find **Desktop HUD**, and choose **Uninstall**.
 
-Uninstalling removes the program but **keeps your data folder**, so a reinstall picks up where you left off.
+The uninstaller asks whether to **also delete Desktop HUD's data**. The answer is **No** unless you choose otherwise: the program is removed and your data folder is kept, so a reinstall picks up where you left off. An update never asks and never deletes anything.
 
 ## Remove your data too
 
-After uninstalling, delete the `%APPDATA%\Desktop HUD` folder. That removes your settings, calendar links, cache, built-in notes and backups. Copy anything you want to keep out of `Notes` and `backups` first.
+Choose **Yes** when the uninstaller asks. That removes your settings, calendar links, cache, built-in notes and backups. Copy anything you want to keep out of `Notes` and `backups` first. Your own notes folder, if you chose one, is never touched.
+
+If you kept your data and change your mind later, delete the `%APPDATA%\Desktop HUD` folder yourself.
 
 ## Your calendar links
 

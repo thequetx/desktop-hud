@@ -32,6 +32,11 @@ describe('parseIcs — plain events', () => {
     ]);
   });
 
+  it('reads a file that starts with a UTF-8 byte-order mark (Bug Log #90)', () => {
+    const { events } = parse('﻿' + cal('BEGIN:VEVENT\r\nUID:bom\r\nSUMMARY:Saved by Notepad\r\nDTSTART:20260826T083000Z\r\nDTEND:20260826T093000Z\r\nEND:VEVENT'));
+    expect(events.map((e: any) => e.title)).toEqual(['Saved by Notepad']);
+  });
+
   it('marks a DATE-valued event as all-day', () => {
     const { events } = parse(
       cal('BEGIN:VEVENT\r\nUID:ad\r\nSUMMARY:Public holiday\r\nDTSTART;VALUE=DATE:20260826\r\nDTEND;VALUE=DATE:20260827\r\nEND:VEVENT'),

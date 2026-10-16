@@ -276,7 +276,7 @@ function CalendarCard() {
     if (c.lastError) return `Not updating — ${c.lastError}${c.fetchedAt ? ` (last good copy from ${agoLabel(c.fetchedAt)})` : ''}`;
     const what = c.kind === 'ics-file' ? c.file ?? 'File' : 'Calendar link';
     const when = c.fetchedAt ? `updated ${agoLabel(c.fetchedAt)}` : 'not read yet';
-    return [`${what} · ${when} · ${c.count} events`, c.warning].filter(Boolean).join(' · ');
+    return [`${what} · ${when} · ${c.count} event${c.count === 1 ? '' : 's'}`, c.warning].filter(Boolean).join(' · ');
   };
 
   const failing = Boolean(google?.connected && sync && (sync.lastError || sync.tokenGone));
@@ -285,7 +285,7 @@ function CalendarCard() {
     : failing
       ? `Sync failing — ${sync?.tokenGone ? 'sync token gone' : sync?.lastError}`
       : sync?.lastSyncAt
-        ? `Synced ${agoLabel(sync.lastSyncAt)} · ${sync.count} events`
+        ? `Synced ${agoLabel(sync.lastSyncAt)} · ${sync.count} event${sync.count === 1 ? '' : 's'}`
         : sync?.syncing
           ? 'Syncing…'
           : 'Not synced yet';

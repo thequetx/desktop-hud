@@ -1771,6 +1771,16 @@ button:disabled {
   flex-direction: column;
   gap: 10px;
 }
+/* Narrow windows (a small laptop at 150% leaves about 670 px): stack the
+   preview under the form instead of squeezing the form under it, and give the
+   bubble list less room (Bug Log #92). */
+@media (max-width: 1080px) {
+  .bform { grid-template-columns: minmax(0, 1fr); }
+  .bform__preview { position: static; }
+}
+@media (max-width: 760px) {
+  .bub-ed { grid-template-columns: 220px minmax(0, 1fr); }
+}
 .bform__previewhead {
   display: flex;
   align-items: baseline;
