@@ -21,7 +21,7 @@
     "pack": "node scripts/prep-wincodesign.mjs && node scripts/make-icons.mjs && node scripts/build-smtc.mjs && vite build && electron-builder --dir -c.extraMetadata.desktopHud.allowDebugPort=true && node scripts/release-check.mjs --warn",
     "dist": "node scripts/prep-wincodesign.mjs && node scripts/make-icons.mjs && node scripts/build-smtc.mjs && vite build && electron-builder -c.extraMetadata.desktopHud.allowDebugPort=true && npm run smoke && node scripts/release-check.mjs --warn",
     "smtc": "node scripts/build-smtc.mjs",
-    "dist:public": "node scripts/assert-public.mjs && node scripts/prep-wincodesign.mjs && node scripts/make-icons.mjs && node scripts/build-smtc.mjs && vite build && electron-builder && npm run smoke && node scripts/release-check.mjs",
+    "dist:public": "node scripts/assert-public.mjs && node scripts/prep-wincodesign.mjs && node scripts/make-icons.mjs && node scripts/build-smtc.mjs && vite build && electron-builder --publish never && npm run smoke && node scripts/release-check.mjs",
     "matrix": "node scripts/matrix.mjs",
     "notices": "node scripts/notices.mjs"
   },
