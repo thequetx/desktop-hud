@@ -47,7 +47,7 @@ const hudHover = require('./hudhover.cjs');
 const { makeWidgetSources } = require('./widgets.cjs');
 const { makeSafeWriter } = require('./safewrite.cjs');
 const { detectConventions, cleanRel, cleanTag } = require('./notesdetect.cjs');
-const { makeNowPlaying } = require('./platform/win32/nowplaying.cjs');
+const { makeNowPlaying, normalizePlayerFilter } = require('./platform/win32/nowplaying.cjs');
 const { makeStartup } = require('./platform/win32/startup.cjs');
 const { loadPrivateAddons, callAddon } = require('./addon-host.cjs');
 const { pickFocusEvent, obsidianUri } = require('./focus.cjs');
@@ -1843,8 +1843,8 @@ function createTray() {
   // started with it, so a change applies after a restart.
   ipcMain.handle('nowplaying:settings', () => ({ player: (configState.config.nowplaying || {}).player || '' }));
   ipcMain.handle('nowplaying:set-player', (_e, player) => {
-    const p = typeof player === 'string' ? player.trim().toLowerCase() : '';
-    if (p && !/^[a-z0-9][a-z0-9._ -]{0,39}$/.test(p)) return { ok: false, error: 'Use a plain app name, like spotify' };
+    const p = normalizePlayerFilter(player);
+    if (p == null) return { ok: false, error: 'Use one to four plain app names, like spotify or spotify,musicbee' };
     configState.config.nowplaying = { v: 1, player: p };
     const w = settingsLib.writeConfig(CONFIG_FILE, configState.config, { readOnly: configState.readOnly });
     return w.ok ? { ok: true, restart: true } : { ok: false, error: w.reason };

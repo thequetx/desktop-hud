@@ -700,7 +700,7 @@ function NotesCard() {
  */
 function NowPlayingCard() {
   const [saved, setSaved] = useState<string | null>(null);
-  const [mode, setMode] = useState<'any' | 'one'>('any');
+  const [mode, setMode] = useState<'any' | 'one' | 'pair' | 'selected'>('any');
   const [app, setApp] = useState('');
   const [playing, setPlaying] = useState<string | null | undefined>(undefined);
   const [msg, setMsg] = useState<string | null>(null);
@@ -710,15 +710,29 @@ function NowPlayingCard() {
     nowPlayingSettings().then((s) => {
       const p = s?.player ?? '';
       setSaved(p);
-      setMode(p ? 'one' : 'any');
+      const normalized = p.trim().toLowerCase();
+      setMode(!normalized || normalized === '*' ? 'any' : normalized === 'spotify,musicbee' ? 'pair' : p.includes(',') ? 'selected' : 'one');
       setApp(p);
     });
     readNowPlaying().then((np) => setPlaying(np ? [np.title, np.artist].filter(Boolean).join(' · ') : null));
   }, []);
   if (saved == null) return null;
 
-  const wanted = mode === 'any' ? '' : app.trim().toLowerCase();
-  const dirty = wanted !== saved && !(mode === 'one' && !wanted);
+  const wanted = mode === 'any' ? '' : mode === 'pair' ? 'spotify,musicbee' : app.trim().toLowerCase();
+  const comparableSaved = saved.trim() === '*' ? '' : saved.split(',').map((name) => name.trim().toLowerCase()).join(',');
+  const appNames = mode === 'selected' ? app.split(',').map((name) => name.trim()) : [app.trim()];
+  let validation: string | null = null;
+  if (mode === 'one' || mode === 'selected') {
+    if (!app.trim()) validation = 'Enter an app name.';
+    else if (mode === 'selected' && app.length > 64) validation = 'Use no more than 64 characters in total.';
+    else if (mode === 'selected' && appNames.length > 4) validation = 'Choose up to four apps.';
+    else if (appNames.some((name) => !name)) validation = 'Separate app names with commas.';
+    else if (appNames.some((name) => name.length > 40)) validation = 'Each app name can be up to 40 characters.';
+    else if (appNames.some((name) => !/^[a-z0-9][a-z0-9._ -]{0,39}$/i.test(name))) {
+      validation = 'Use letters, numbers, spaces, dots, underscores or hyphens; start each name with a letter or number.';
+    }
+  }
+  const dirty = wanted !== comparableSaved;
   const apply = async () => {
     setMsg(null);
     const r = await setNowPlayingPlayer(wanted);
@@ -733,14 +747,14 @@ function NowPlayingCard() {
       <IntegHead
         title="Now playing"
         health="ok"
-        status={saved ? `Only ${saved}` : 'Any player'}
+        status={!comparableSaved ? 'Any player' : comparableSaved === 'spotify,musicbee' ? 'Spotify + MusicBee' : comparableSaved.includes(',') ? 'Selected apps' : `Only ${saved}`}
         reads="The title, artist, cover and progress your music or video app shows in Windows’ media controls."
         writes="Nothing. It can’t play, pause or skip."
       />
       <p className="integ__lead">
         {playing === undefined ? ' ' : playing ? `Playing now: ${playing}` : 'Nothing is playing right now. The bubble shows while something plays.'}
       </p>
-      <Row label="Show music from" hint={mode === 'one' ? 'The app’s name as Windows knows it, like spotify or chrome.' : 'Whichever app is playing.'}>
+      <Row label="Show music from" hint={mode === 'any' ? 'Whichever app is playing.' : mode === 'pair' ? 'Shows Spotify and MusicBee when they report to Windows.' : 'Use the app name Windows reports, such as spotify or chrome.'}>
         <Segmented
           ariaLabel="Show music from"
           value={mode}
@@ -748,17 +762,21 @@ function NowPlayingCard() {
           options={[
             { value: 'any', label: 'Any player' },
             { value: 'one', label: 'One app only' },
+            { value: 'pair', label: 'Spotify + MusicBee' },
+            { value: 'selected', label: 'Selected apps' },
           ]}
         />
       </Row>
-      {mode === 'one' && (
+      {(mode === 'one' || mode === 'selected') && (
         <label className="fld">
-          <span className="fld__label">App name</span>
+          <span className="fld__label">{mode === 'one' ? 'App name' : 'App names'}</span>
           <span className="fld__control">
-            <input value={app} placeholder="spotify" maxLength={40} spellCheck={false} onChange={(e) => setApp(e.target.value)} />
+            <input value={app} placeholder={mode === 'one' ? 'spotify' : 'spotify, musicbee'} maxLength={mode === 'one' ? 40 : 64} spellCheck={false} aria-describedby="nowplaying-app-hint" onChange={(e) => setApp(e.target.value)} />
           </span>
+          <span className="fld__hint" id="nowplaying-app-hint">{mode === 'one' ? 'Up to 40 characters.' : 'Separate up to four app names with commas. Up to 40 characters per name and 64 characters total.'}</span>
         </label>
       )}
+      {validation && (mode === 'one' || mode === 'selected') && <p className="banner banner--warn" role="alert">{validation}</p>}
       {msg && <p className="banner banner--warn">{msg}</p>}
       {restartDue ? (
         <div className="restart">
@@ -769,7 +787,7 @@ function NowPlayingCard() {
         </div>
       ) : (
         <div className="card__foot">
-          <button className="btn btn--primary" onClick={apply} disabled={!dirty}>
+          <button className="btn btn--primary" onClick={apply} disabled={!dirty || Boolean(validation)}>
             Apply and restart
           </button>
         </div>

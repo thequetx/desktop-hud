@@ -11,10 +11,11 @@ It works with no account, no notes and no calendar. It becomes useful once you p
 1. [Getting started](getting-started.md): installing, the three set-up steps, finding the app afterwards
 2. [Calendars](calendars.md): adding a calendar link or an .ics file, and where to find your link in Google, Outlook, Apple iCloud and Canvas
 3. [Notes](notes.md): built-in notes or your own folder, read-only by default, exactly what gets written, and backups
-4. [Bubbles and arrange mode](bubbles.md): what each bubble shows, presets, the backdrop, and moving bubbles around
-5. [Hotkeys](hotkeys.md): all off until you choose them
-6. [Troubleshooting](troubleshooting.md)
-7. [Uninstalling and your data](uninstall.md): what is stored where, and how to remove it
+4. [Now playing](now-playing.md): Windows media controls, app filters and MusicBee setup
+5. [Bubbles and arrange mode](bubbles.md): what each bubble shows, presets, the backdrop, and moving bubbles around
+6. [Hotkeys](hotkeys.md): all off until you choose them
+7. [Troubleshooting](troubleshooting.md)
+8. [Uninstalling and your data](uninstall.md): what is stored where, and how to remove it
 
 ## In one paragraph each
 

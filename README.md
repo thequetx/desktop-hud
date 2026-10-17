@@ -20,6 +20,7 @@ calm idle screen fades in. It works over any wallpaper.
   Markdown notes (an Obsidian vault works). It shows this week's intentions and
   tasks, a daily note, or any section of any note. Your folder stays
   **read-only** unless you turn writing on.
+- **Now playing.** Show music apps that publish to Windows media controls. The [Now playing guide](docs/now-playing.md) covers Spotify, MusicBee setup and app filters.
 - **Bubbles you arrange.** Choose from presets (Minimal, Focus, Full), drag
   bubbles between corners, and make your own from a note section, a task query or
   a few words of text. Hide any corner from screen capture.

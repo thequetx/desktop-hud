@@ -125,6 +125,8 @@ export interface NowPlaying {
   playing: boolean;
   title: string;
   artist: string;
+  /** Windows app identity for the selected media session, when available. */
+  sourceAppId?: string;
   /** The album art as a data: URL, or null. */
   cover: string | null;
   /** Elapsed and total ms, for the progress bar; null when the player omits them. */
@@ -153,8 +155,9 @@ export interface QueuedTrack {
 /** How long a paused track stays on the HUD (dimming) before it hides. */
 export const PAUSE_LINGER_MS = 2 * 60 * 1000;
 
-/** The track's identity: a pause/resume keeps it, a new song changes it. */
-export const trackKey = (np: Pick<NowPlaying, 'title' | 'artist'>) => `${np.title}\u0000${np.artist}`;
+/** Track identity includes the source when known, so another app starts fresh. */
+export const trackKey = (np: Pick<NowPlaying, 'title' | 'artist'> & Partial<Pick<NowPlaying, 'sourceAppId'>>) =>
+  `${np.sourceAppId ? `${np.sourceAppId}\u0000` : ''}${np.title}\u0000${np.artist}`;
 
 /**
  * What the Now playing bubble shows: `playing`, `paused` (dimmed, for a

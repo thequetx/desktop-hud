@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { createRequire } from 'node:module';
 import { PRESENTATION_DEFAULTS } from '../src/lib/presentation';
-import { nowPlayingState, PAUSE_LINGER_MS, progressTarget, visibleBubbles } from '../src/lib/widgets';
+import { nowPlayingState, PAUSE_LINGER_MS, progressTarget, trackKey, visibleBubbles } from '../src/lib/widgets';
 
 const require_ = createRequire(import.meta.url);
-const { toNowPlaying, imageType, pngSize, accentFromBgra } = require_('../electron/platform/win32/nowplaying.cjs') as any;
+const { toNowPlaying, imageType, pngSize, accentFromBgra, normalizePlayerFilter, coverIdentity, playerArg, makeNowPlaying } = require_('../electron/platform/win32/nowplaying.cjs') as any;
 
 /** One line from smtc-reader.exe, cover already split off. */
 const line = (over: object = {}) => ({
@@ -25,6 +27,7 @@ describe('Windows media feed -> the HUD, in-process (Phase 9.3, S11)', () => {
   it('gives the track, a data: cover and the extrapolated position', () => {
     expect(toNowPlaying(line(), { now: 1_004_000, cover: DATA_URL, accent: '#d23a4c' })).toEqual({
       playing: true,
+      sourceAppId: '',
       title: 'CODEINE',
       artist: 'ero808',
       cover: DATA_URL,
@@ -43,6 +46,60 @@ describe('Windows media feed -> the HUD, in-process (Phase 9.3, S11)', () => {
   it('has an accent only while playing, and no total for an unknown length', () => {
     expect(toNowPlaying(line({ playing: false }), { now: 1_004_000, accent: '#d23a4c' }).accent).toBeNull();
     expect(toNowPlaying(line({ durationMs: 0 }), { now: 1_004_000 }).totalMs).toBeNull();
+  });
+
+  it('carries the selected Windows app identity through to the HUD', () => {
+    expect(toNowPlaying(line({ sourceAppId: 'MusicBee.exe' }), { now: 1_004_000 }).sourceAppId).toBe('MusicBee.exe');
+    expect(toNowPlaying(line({ sourceAppId: null }), { now: 1_004_000 }).sourceAppId).toBe('');
+  });
+
+  it('changes cover identity when the source app changes on the same track', () => {
+    expect(coverIdentity('Spotify.exe', 'same-track')).not.toBe(coverIdentity('MusicBee.exe', 'same-track'));
+  });
+
+  it('hides stale cover art on a source switch, then loads that source art even with the same cover key', async () => {
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const child = new EventEmitter() as any;
+    child.stdout = stdout;
+    child.stderr = stderr;
+    child.kill = () => {};
+    let decodeCalls = 0;
+    let thumbCalls = 0;
+    const feed = makeNowPlaying({
+      exe: 'reader.exe',
+      spawnReader: () => child,
+      log: () => {},
+      decode: () => {
+        decodeCalls++;
+        return { bitmap: Buffer.from([0, 0, 255, 255]), width: 1, height: 1 };
+      },
+      thumb: () => `data:image/jpeg;base64,source-${++thumbCalls}`,
+    });
+    feed.start();
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64');
+    const emit = (sourceAppId: string, withArt: boolean) => stdout.write(`${JSON.stringify({ ...line({ sourceAppId }), ...(withArt ? { cover: png } : {}) })}\n`);
+    emit('Spotify.exe', true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(feed.current().cover).toBe('data:image/jpeg;base64,source-1');
+    expect(feed.snapshot().cover.key).toBe('02ebfd45');
+    emit('MusicBee.exe', false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(feed.current().cover).toBeNull();
+    expect(feed.snapshot().cover).toBeNull();
+    expect(feed.current().sourceAppId).toBe('MusicBee.exe');
+    expect(decodeCalls).toBe(1);
+    expect(thumbCalls).toBe(1);
+    emit('MusicBee.exe', true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(feed.current().cover).toBe('data:image/jpeg;base64,source-2');
+    expect(feed.snapshot().cover.key).toBe('02ebfd45');
+    expect(feed.snapshot().cover.sourceAppId).toBe('MusicBee.exe');
+    expect(decodeCalls).toBe(2);
+    expect(thumbCalls).toBe(2);
+    feed.stop();
+    stdout.destroy();
+    stderr.destroy();
   });
 
   it('is null when nothing is playing, so the bubble hides', () => {
@@ -90,6 +147,14 @@ describe('Paused state', () => {
   });
 });
 
+describe('Now playing track identity', () => {
+  it('treats the same track from different apps as separate tracks', () => {
+    const track = { title: 'Mural', artist: 'Lupe Fiasco' };
+    expect(trackKey({ ...track, sourceAppId: 'Spotify.exe' })).not.toBe(trackKey({ ...track, sourceAppId: 'MusicBee.exe' }));
+    expect(trackKey(track)).toBe(trackKey({ ...track }));
+  });
+});
+
 describe('Now playing bubble', () => {
   it('is on by default, bottom-right', () => {
     const at = (kinds: string[]) =>
@@ -120,12 +185,21 @@ describe('Accent colour (from the cover, in the main process)', () => {
 });
 
 describe('playerArg — what the reader is told to follow (Phase 9.4)', () => {
-  const { playerArg } = require_('../electron/platform/win32/nowplaying.cjs') as any;
   it('any player by default; a plain word names one; anything else is any player', () => {
     expect(playerArg(undefined)).toBe('*');
     expect(playerArg('')).toBe('*');
     expect(playerArg('Spotify')).toBe('spotify');
     expect(playerArg('--evil "x"')).toBe('*');
     expect(playerArg('a'.repeat(60))).toBe('*');
+  });
+
+  it('normalizes one to four app filters and rejects malformed or oversized lists', () => {
+    expect(normalizePlayerFilter(' Spotify, MusicBee ')).toBe('spotify,musicbee');
+    expect(normalizePlayerFilter('')).toBe('');
+    expect(normalizePlayerFilter('*')).toBe('*');
+    for (const invalid of ['spotify,', ',spotify', 'spotify,,musicbee', 'a,b,c,d,e', 'a'.repeat(41), 'a'.repeat(65), '--bad']) {
+      expect(normalizePlayerFilter(invalid)).toBeNull();
+      expect(playerArg(invalid)).toBe('*');
+    }
   });
 });

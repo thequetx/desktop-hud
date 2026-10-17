@@ -42,7 +42,7 @@ Your own notes folder is read-only until you allow writing. Turn on **Let Deskto
 
 ## Now playing shows the wrong app, or nothing
 
-Now playing reads what your app reports to Windows' media controls, the same thing the volume flyout shows. Some apps don't report. To show only one app, choose **One app only** in **Display & HUD → Integrations → Now playing** and type its name (like `spotify`), then **Apply and restart**.
+Now playing reads what apps publish to Windows media controls. Some apps do not publish a session. To show only one app, choose **One app only** in **Display & HUD → Integrations → Now playing** and type its name (like `spotify`), then **Apply and restart**. For Spotify and MusicBee, choose **Spotify + MusicBee**. MusicBee needs a compatible SMTC plugin such as mb_MediaControl; follow the [MusicBee setup steps](now-playing.md#musicbee). For an installed copy, use the per-user plugin folder `%APPDATA%\MusicBee\Plugins`; the guide has the portable-install location too. If its session appears in Windows media controls but the HUD still omits it, choose **Selected apps** and enter the app identity Windows reports; the preset uses `musicbee`. You can also enter a comma-separated list there.
 
 If your antivirus quarantined a file called `smtc-reader.exe`, that is Desktop HUD's small helper for reading the media controls. It only reads what is playing and never connects to anything. Restore it, or allow it, and restart Desktop HUD. Everything else works without it; only Now playing stays empty. Please also report it in the issue tracker, so it can be reported to the antivirus maker as a false positive.
 

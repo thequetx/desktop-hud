@@ -110,6 +110,7 @@ function toNowPlaying(state, { now, cover = null, accent = null }) {
   const playing = Boolean(state.playing);
   return {
     playing,
+    sourceAppId: state.sourceAppId == null ? '' : String(state.sourceAppId),
     title: String(state.title).slice(0, 200),
     artist: state.artist ? String(state.artist).slice(0, 200) : '',
     cover,
@@ -125,13 +126,28 @@ function toNowPlaying(state, { now, cover = null, accent = null }) {
  *   `decode` turns a cover into a small bitmap for the accent colour; the
  *   default uses Electron's nativeImage.
  */
-/** The reader's player argument: a plain word, or `*` for any player. */
-function playerArg(v) {
-  const s = String(v ?? '').trim().toLowerCase();
-  return /^[a-z0-9][a-z0-9._ -]{0,39}$/.test(s) ? s : '*';
+/** Normalize the saved player filter. Null means invalid; '' and '*' mean any player. */
+function normalizePlayerFilter(v) {
+  if (typeof v !== 'string') return null;
+  const raw = v.trim();
+  if (raw === '' || raw === '*') return raw;
+  if (raw.length > 64) return null;
+  const names = raw.split(',').map((name) => name.trim().toLowerCase());
+  if (names.length > 4 || names.some((name) => !/^[a-z0-9][a-z0-9._ -]{0,39}$/.test(name))) return null;
+  return names.join(',');
 }
 
-function makeNowPlaying({ exe, player = '*', log = (m) => console.log(`[wd] nowplaying: ${m}`), decode = decodeWithElectron, thumb = thumbWithElectron }) {
+function coverIdentity(sourceAppId, coverKey) {
+  return `${String(sourceAppId || '')}\u001f${String(coverKey || '')}`;
+}
+
+/** The reader's argument, with the legacy invalid-input fallback kept for runtime config. */
+function playerArg(v) {
+  const normalized = normalizePlayerFilter(v);
+  return normalized == null || normalized === '' ? '*' : normalized;
+}
+
+function makeNowPlaying({ exe, player = '*', log = (m) => console.log(`[wd] nowplaying: ${m}`), decode = decodeWithElectron, thumb = thumbWithElectron, spawnReader = spawn }) {
   let child = null;
   let stopped = false;
   let restartTimer = null;
@@ -152,8 +168,8 @@ function makeNowPlaying({ exe, player = '*', log = (m) => console.log(`[wd] nowp
       const buf = Buffer.from(j.cover, 'base64');
       const type = imageType(buf);
       if (type) {
-        const key = String(j.coverKey || '');
-        if (!cover || cover.key !== key) {
+        const identity = coverIdentity(j.sourceAppId, j.coverKey);
+        if (!cover || cover.identity !== identity) {
           let accent = null;
           try {
             const img = decode(buf);
@@ -170,7 +186,7 @@ function makeNowPlaying({ exe, player = '*', log = (m) => console.log(`[wd] nowp
             dataUrl = null;
           }
           if (!dataUrl) dataUrl = `data:${type};base64,${buf.toString('base64')}`;
-          cover = { key, buf, type, size: pngSize(buf) || { width: 300, height: 300 }, dataUrl, accent };
+          cover = { key: String(j.coverKey || ''), identity, sourceAppId: String(j.sourceAppId || ''), buf, type, size: pngSize(buf) || { width: 300, height: 300 }, dataUrl, accent };
         }
       }
     }
@@ -181,7 +197,7 @@ function makeNowPlaying({ exe, player = '*', log = (m) => console.log(`[wd] nowp
   function startReader() {
     if (stopped || child) return;
     try {
-      child = spawn(exe, [playerArg(player)], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawnReader(exe, [playerArg(player)], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
       log(`reader failed to start: ${err.message}`);
       child = null;
@@ -219,7 +235,7 @@ function makeNowPlaying({ exe, player = '*', log = (m) => console.log(`[wd] nowp
   /** The live reader state and its cover, or nulls. For the owner's stream add-on. */
   function snapshot(now = Date.now()) {
     const live = state && now - lastLineAt < STALE_MS ? state : null;
-    const coverOk = Boolean(live && live.ok && cover && cover.key === live.coverKey);
+    const coverOk = Boolean(live && live.ok && cover && cover.key === live.coverKey && cover.sourceAppId === String(live.sourceAppId || ''));
     return { state: live, cover: coverOk ? cover : null, now };
   }
 
@@ -263,4 +279,4 @@ function decodeWithElectron(buf) {
 }
 
 module.exports = {
-  playerArg, makeNowPlaying, toNowPlaying, imageType, pngSize, accentFromBgra };
+  playerArg, normalizePlayerFilter, coverIdentity, makeNowPlaying, toNowPlaying, imageType, pngSize, accentFromBgra };
